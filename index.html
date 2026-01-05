@@ -1,570 +1,344 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { initializeApp } from 'firebase/app';
-import { 
-  getFirestore, collection, doc, setDoc, getDoc, 
-  query, onSnapshot, orderBy, addDoc, serverTimestamp, deleteDoc, updateDoc, getDocs
-} from 'firebase/firestore';
-import { 
-  getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged 
-} from 'firebase/auth';
-import { 
-  CheckCircle2, BookOpen, History, Sparkles, 
-  Heart, Trophy, Search, Send, Loader2, Plus, Trash2, Calendar as CalendarIcon, Settings2, 
-  ChevronRight, MessageSquareQuote, Edit3, X, Star, PartyPopper, Repeat, Clock, Bookmark, BarChart3, TrendingUp, Cloud, Coffee, AlertTriangle, RefreshCw, Flame, ExternalLink, Leaf, StickyNote, Wind, Award
-} from 'lucide-react';
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KANG's 2026 ⭐ Guardian</title>
+    <!-- 引入 React, ReactDOM, Babel (CDN) -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google 字體 -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f7f2ed; color: #2d2d2d; overflow-x: hidden; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-in { animation: fadeIn 0.6s ease-out forwards; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
 
-// --- Firebase 配置 ---
-const firebaseConfig = {
-  apiKey: "AIzaSyDLeH52pL_lGEhj41ejj59nEL5ge4MxsGk",
-  authDomain: "kangs-2026.firebaseapp.com",
-  projectId: "kangs-2026",
-  storageBucket: "kangs-2026.firebasestorage.app",
-  messagingSenderId: "1002873615830",
-  appId: "1:1002873615830:web:54825d42280a09c367e077"
-};
-const appId = 'kang2026'; // 這裡固定寫你的專案名稱就好
+    <!-- Firebase 初始化模組 (Type Module) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, doc, setDoc, getDoc, query, onSnapshot, addDoc, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-// --- 日系秋季配色系統 (Autumn Zen) ---
-const theme = {
-  bg: "#f7f2ed",
-  card: "#ffffff",
-  border: "#c0b8b4",
-  secondary: "#86a0bb",
-  primary: "#14233a",
-  accent: "#cb914a",
-  text: "#2d2d2d",
-  success: "#5b8e7d",
-  danger: "#a63d40"
-};
+        // --- 串接你提供的專屬 Firebase 配置 ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDLeH52pL_lGEhj41ejj59nEL5ge4MxsGk",
+            authDomain: "kangs-2026.firebaseapp.com",
+            projectId: "kangs-2026",
+            storageBucket: "kangs-2026.firebasestorage.app",
+            messagingSenderId: "1002873615830",
+            appId: "1:1002873615830:web:54825d42280a09c367e077"
+        };
 
-const SYSTEM_PROMPT = `你是一位日系極簡主義的生命建築師。
-你的任務是提供溫暖如秋陽、純文字且充滿哲思的反饋。
-1. 嚴禁使用任何標點符號之外的符號 (如 #, *, -)。
-2. 針對避風港重啟：給予極短、充滿力量的一句話。`;
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
 
-async function callGemini(prompt, systemInstruction = SYSTEM_PROMPT) {
-  const apiKey = "AIzaSyCNNs-e8gNJzACCvjdgCNuPPQ09CYxG_mg"; 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        systemInstruction: { parts: [{ text: systemInstruction }] }
-      })
-    });
-    const data = await response.json();
-    let text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    return text.replace(/[#*]/g, '').trim();
-  } catch (err) { return "秋風掠過，導師正在沈思。"; }
-}
+        // 核心修正：將所有 Firebase 工具掛載到 window，讓 React 腳本能讀取
+        window.fb = { 
+            db, auth, collection, doc, setDoc, getDoc, query, onSnapshot, addDoc, serverTimestamp, deleteDoc,
+            signInAnonymously, onAuthStateChanged 
+        };
+    </script>
 
-const Card = ({ children, className = "", style = {} }) => (
-  <div style={{ borderColor: theme.border, ...style }} className={`bg-white rounded-[2.5rem] border-[0.5px] shadow-sm p-7 ${className}`}>
-    {children}
-  </div>
-);
+    <!-- 引入 Lucide 圖示 (CDN) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
 
-const Button = ({ children, onClick, variant = 'primary', loading = false, disabled = false, className = "" }) => {
-  const styles = {
-    primary: { backgroundColor: theme.primary, color: "#fff" },
-    secondary: { backgroundColor: theme.secondary, color: "#fff" },
-    accent: { backgroundColor: theme.accent, color: "#fff" },
-    danger: { backgroundColor: theme.danger, color: "#fff" },
-    ghost: { backgroundColor: "transparent", color: theme.secondary, border: `1px solid ${theme.border}` }
-  };
-  return (
-    <button onClick={onClick} disabled={loading || disabled} style={styles[variant]} className={`px-6 py-3.5 rounded-2xl font-black transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 ${className}`}>
-      {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-      {children}
-    </button>
-  );
-};
+    <!-- React 應用程式邏輯 -->
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useCallback } = React;
 
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [activeTab, setActiveTab] = useState('today');
-  const [loading, setLoading] = useState(true);
-  const [logs, setLogs] = useState([]);
-  const [journals, setJournals] = useState([]);
-  const [favorites, setFavorites] = useState([]);
-  const [templates, setTemplates] = useState([]);
-  const [seeds, setSeeds] = useState([]);
-  const [showCelebration, setShowCelebration] = useState(false);
+        // --- Gemini AI 金鑰與指令配置 ---
+        const GEMINI_API_KEY = "AIzaSyCNNs-e8gNJzACCvjdgCNuPPQ09CYxG_mg";
+        const SYSTEM_PROMPT = `你是一位日系極簡主義的生命建築師。你的任務是提供溫暖如秋陽、純文字且充滿哲思的反饋。1. 嚴禁使用標點符號之外的符號。2. 針對避風港重啟：給予極短、充滿力量的一句話。`;
 
-  const getPath = useCallback((col) => {
-    if (!user) return null;
-    return `artifacts/${appId}/users/${user.uid}/${col}`;
-  }, [user]);
+        async function callGemini(prompt) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] }
+                    })
+                });
+                const data = await response.json();
+                return (data.candidates?.[0]?.content?.parts?.[0]?.text || "秋風吹過...").replace(/[#*]/g, '').trim();
+            } catch (err) { return "導師正在靜默中。"; }
+        }
 
-  useEffect(() => {
-    const initAuth = async () => {
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        await signInWithCustomToken(auth, __initial_auth_token);
-      } else { await signInAnonymously(auth); }
-    };
-    initAuth();
-    onAuthStateChanged(auth, (u) => { setUser(u); setLoading(false); });
-  }, []);
+        // --- 視覺設計 Token ---
+        const theme = { 
+            primary: "#14233a", 
+            accent: "#cb914a", 
+            border: "#c0b8b4", 
+            secondary: "#86a0bb", 
+            success: "#5b8e7d", 
+            danger: "#a63d40" 
+        };
 
-  useEffect(() => {
-    if (!user) return;
-    const setupListener = (colName, setter) => {
-      const path = getPath(colName);
-      if (!path) return;
-      return onSnapshot(query(collection(db, path)), (snap) => {
-        setter(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      });
-    };
-    const unsubLogs = setupListener('dailyLogs', setLogs);
-    const unsubJournals = setupListener('journalEntries', setJournals);
-    const unsubFavs = setupListener('favoriteReviews', setFavorites);
-    const unsubTemps = setupListener('taskTemplates', setTemplates);
-    const unsubSeeds = setupListener('seeds', setSeeds);
-    return () => { unsubLogs?.(); unsubJournals?.(); unsubFavs?.(); unsubTemps?.(); unsubSeeds?.(); };
-  }, [user, getPath]);
+        const Card = ({ children, className = "", style = {} }) => (
+            <div style={{ borderColor: theme.border, ...style }} className={`bg-white rounded-[2.5rem] border-[0.5px] shadow-sm p-7 ${className}`}>{children}</div>
+        );
 
-  if (loading) return <div className="min-h-screen flex flex-col items-center justify-center bg-[#f7f2ed]"><Leaf className="animate-bounce text-[#cb914a] mb-4" size={40}/><div className="font-black tracking-[0.3em] text-[#14233a]">KANG'S 2026</div></div>;
+        // --- 主程式入口 ---
+        const App = () => {
+            const [user, setUser] = useState(null);
+            const [activeTab, setActiveTab] = useState('today');
+            const [loading, setLoading] = useState(true);
+            const [logs, setLogs] = useState([]);
+            const [seeds, setSeeds] = useState([]);
+            const [journals, setJournals] = useState([]);
+            const [templates, setTemplates] = useState([]);
+            const [showCelebration, setShowCelebration] = useState(false);
 
-  return (
-    <div className="min-h-screen pb-36 font-sans selection:bg-amber-200" style={{ backgroundColor: theme.bg, color: theme.text }}>
-      {showCelebration && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/90 backdrop-blur-2xl animate-in fade-in zoom-in duration-700 cursor-pointer text-center px-10" onClick={() => setShowCelebration(false)}>
-          <div className="relative mb-8">
-             <PartyPopper size={120} style={{ color: theme.accent }} className="animate-bounce" />
-             <div className="absolute inset-0 animate-ping rounded-full bg-orange-200/30"></div>
-          </div>
-          <h2 className="text-4xl font-black mb-4 tracking-tighter">意志的甜美果實</h2>
-          <p className="text-slate-500 font-medium leading-relaxed italic">今天也是那 20% 的關鍵一天。</p>
-        </div>
-      )}
+            const appId = "kang2026";
+            const getPath = useCallback((col) => {
+                if (!user) return null;
+                return `artifacts/${appId}/users/${user.uid}/${col}`;
+            }, [user]);
 
-      <header className="sticky top-0 z-40 bg-white/60 backdrop-blur-xl border-b px-6 py-6" style={{ borderColor: theme.border }}>
-        <div className="max-w-2xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-2">
-             <div className="w-10 h-10 bg-[#14233a] rounded-2xl flex items-center justify-center shadow-lg"><Star size={20} fill="#cb914a" stroke="#cb914a" /></div>
-             <h1 className="text-xl font-black tracking-tighter">KANG's 2026</h1>
-          </div>
-          <button onClick={() => setActiveTab('favs')} className={`p-2 rounded-xl transition-all ${activeTab === 'favs' ? 'bg-indigo-50 text-indigo-600 shadow-inner' : 'text-slate-400 hover:bg-slate-100'}`}>
-            <Bookmark size={24} />
-          </button>
-        </div>
-      </header>
+            // 等待 Firebase 準備就緒
+            useEffect(() => {
+                const checkFirebase = setInterval(() => {
+                    if (window.fb && window.fb.signInAnonymously) {
+                        clearInterval(checkFirebase);
+                        const { auth, signInAnonymously, onAuthStateChanged } = window.fb;
+                        signInAnonymously(auth).catch(err => console.error("Firebase Login Fail:", err));
+                        onAuthStateChanged(auth, (u) => { if (u) { setUser(u); setLoading(false); } });
+                    }
+                }, 100);
+                return () => clearInterval(checkFirebase);
+            }, []);
 
-      <main className="max-w-2xl mx-auto px-4 py-6">
-        {activeTab === 'today' && <TodayView db={db} user={user} getPath={getPath} onCelebrate={() => setShowCelebration(true)} templates={templates} logs={logs} seeds={seeds} />}
-        {activeTab === 'reflect' && <ReflectView db={db} user={user} getPath={getPath} journals={journals} logs={logs} />}
-        {activeTab === 'ai' && <AIView logs={logs} journals={journals} templates={templates} db={db} getPath={getPath} seeds={seeds} />}
-        {activeTab === 'favs' && <FavoritesView favorites={favorites} db={db} getPath={getPath} />}
-      </main>
+            // 資料監聽機制
+            useEffect(() => {
+                if (!user || !window.fb) return;
+                const { db, collection, query, onSnapshot } = window.fb;
+                const setup = (col, setter) => {
+                    const path = getPath(col);
+                    if (!path) return () => {};
+                    return onSnapshot(query(collection(db, path)), (snap) => {
+                        setter(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                    });
+                };
+                const u1 = setup('dailyLogs', setLogs);
+                const u2 = setup('seeds', setSeeds);
+                const u3 = setup('journalEntries', setJournals);
+                const u4 = setup('taskTemplates', setTemplates);
+                return () => { u1(); u2(); u3(); u4(); };
+            }, [user, getPath]);
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-2xl border-t px-8 py-6 z-40" style={{ borderColor: theme.border }}>
-        <div className="max-w-2xl mx-auto flex justify-between items-center">
-          <NavButton active={activeTab === 'today'} icon={<CheckCircle2 />} label="努力" onClick={() => setActiveTab('today')} />
-          <NavButton active={activeTab === 'reflect'} icon={<MessageSquareQuote />} label="留言" onClick={() => setActiveTab('reflect')} />
-          <NavButton active={activeTab === 'ai'} icon={<TrendingUp />} label="成長" onClick={() => setActiveTab('ai')} />
-        </div>
-      </nav>
-    </div>
-  );
-}
+            // 每次切換分頁重新渲染圖示
+            useEffect(() => { if (!loading) lucide.createIcons(); }, [loading, activeTab]);
 
-function NavButton({ active, icon, label, onClick }) {
-  return (
-    <button onClick={onClick} className="flex flex-col items-center gap-1.5 transition-all" style={{ color: active ? theme.primary : theme.secondary, opacity: active ? 1 : 0.4 }}>
-      {React.cloneElement(icon, { size: 26, strokeWidth: active ? 3 : 2 })}
-      <span className="text-[10px] font-black tracking-widest uppercase">{label}</span>
-    </button>
-  );
-}
-
-// --- 今日努力頁面 ---
-function TodayView({ db, user, getPath, onCelebrate, templates, logs, seeds }) {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [tasks, setTasks] = useState([]);
-  const [mood, setMood] = useState("");
-  const [isLazy, setIsLazy] = useState(false);
-  const [lastSaved, setLastSaved] = useState(null);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [newTask, setNewTask] = useState({ label: "", category: "side", recurrence: "daily" });
-
-  const identityStats = useMemo(() => {
-    const s = { side: 0, lang: 0, health: 0, fruits: 0, streak: 0 };
-    const defaultMap = { 't-side': 'side', 't-lang': 'lang', 't-health': 'health' };
-    logs.forEach(l => {
-      const checkedInLog = l.tasks?.filter(t => t.checked) || [];
-      const hasSide = checkedInLog.some(t => defaultMap[t.id] === 'side' || templates.find(temp => temp.id === t.id)?.category === 'side');
-      const hasLang = checkedInLog.some(t => defaultMap[t.id] === 'lang' || templates.find(temp => temp.id === t.id)?.category === 'lang');
-      const hasHealth = checkedInLog.some(t => defaultMap[t.id] === 'health' || templates.find(temp => temp.id === t.id)?.category === 'health');
-      if (hasSide && hasLang && hasHealth) s.fruits++;
-      checkedInLog.forEach(task => {
-        let cat = defaultMap[task.id] || templates.find(temp => temp.id === task.id)?.category;
-        if (cat && s[cat] !== undefined) s[cat]++;
-      });
-    });
-    const todayStr = new Date().toISOString().split('T')[0];
-    let checkDate = new Date(todayStr);
-    let currentStreak = 0;
-    for (let i = 0; i < 365; i++) {
-      const dStr = checkDate.toISOString().split('T')[0];
-      const log = logs.find(l => l.date === dStr);
-      if (log?.tasks?.some(t => t.checked)) { currentStreak++; checkDate.setDate(checkDate.getDate() - 1); } 
-      else if (dStr === todayStr) { checkDate.setDate(checkDate.getDate() - 1); }
-      else break;
-    }
-    s.streak = currentStreak;
-    return s;
-  }, [logs, templates]);
-
-  // 稱號系統
-  const getIdentityTitle = (cat, count) => {
-    if (count >= 100) return "大師";
-    if (count >= 50) return "實踐家";
-    if (count >= 20) return "覺醒者";
-    return "初行者";
-  };
-
-  const dailyAffirmation = useMemo(() => {
-    if (seeds.length === 0) return "今天不需要完美，只要沒有放棄。";
-    const randomSeed = seeds[Math.floor(Math.random() * seeds.length)];
-    return randomSeed.contract.split('。')[0] + '。';
-  }, [seeds, selectedDate]);
-
-  const fetchDateData = useCallback(async (dateStr) => {
-    if (!user) return;
-    const path = getPath('dailyLogs');
-    if (!path) return;
-    const docRef = doc(db, path, dateStr);
-    const docSnap = await getDoc(docRef);
-    const targetDate = new Date(dateStr);
-    const dayOfWeek = targetDate.getDay();
-    const dayOfMonth = targetDate.getDate();
-    const defaultTemplates = [
-      { id: 't-side', label: '副業｜贖回自由時間', sub: '打開文件/改一行/錄個點子', category: 'side', recurrence: 'daily' },
-      { id: 't-lang', label: '語言｜10分鐘外交官', sub: '看影片/聽音檔/背一詞', category: 'lang', recurrence: 'daily' },
-      { id: 't-health', label: '健康｜不再惡化的選擇', sub: '少糖/多走/早睡', category: 'health', recurrence: 'daily' }
-    ];
-    const allTemplates = [...defaultTemplates, ...templates];
-    const filtered = allTemplates.filter(t => {
-      if (t.recurrence === 'daily') return true;
-      if (t.recurrence === 'once' && t.targetDate === dateStr) return true;
-      if (t.recurrence === 'weekly' && (t.dayOfWeek === dayOfWeek || !t.dayOfWeek)) return true;
-      if (t.recurrence === 'monthly' && t.dayOfMonth === dayOfMonth) return true;
-      return false;
-    });
-    if (docSnap.exists()) {
-      const d = docSnap.data();
-      setTasks(filtered.map(temp => ({ ...temp, checked: d.tasks?.find(st => st.id === temp.id)?.checked || false })));
-      setMood(d.mood || ""); setIsLazy(d.isLazy || false);
-      if(d.updatedAt) setLastSaved(new Date(d.updatedAt.seconds * 1000).toLocaleTimeString());
-    } else {
-      setTasks(filtered.map(t => ({ ...t, checked: false })));
-      setMood(""); setIsLazy(false); setLastSaved(null);
-    }
-  }, [db, getPath, templates, user]);
-
-  useEffect(() => { fetchDateData(selectedDate); }, [selectedDate, fetchDateData]);
-
-  const sync = async (updatedTasks, updatedMood, updatedLazy) => {
-    const path = getPath('dailyLogs');
-    if (!path) return;
-    setIsSyncing(true);
-    await setDoc(doc(db, path, selectedDate), {
-      date: selectedDate,
-      tasks: updatedTasks.map(({id, checked}) => ({id, checked})),
-      mood: updatedMood,
-      isLazy: updatedLazy,
-      updatedAt: serverTimestamp()
-    });
-    setLastSaved(new Date().toLocaleTimeString());
-    setIsSyncing(false);
-  };
-
-  const toggleTask = (id) => {
-    if (isLazy) return;
-    const updated = tasks.map(t => t.id === id ? { ...t, checked: !t.checked } : t);
-    setTasks(updated);
-    const defaultMap = { 't-side': 'side', 't-lang': 'lang', 't-health': 'health' };
-    const checkCat = (cat) => updated.some(t => t.checked && (defaultMap[t.id] === cat || t.category === cat));
-    if (checkCat('side') && checkCat('lang') && checkCat('health') && selectedDate === new Date().toISOString().split('T')[0]) {
-       const wasC = tasks.some(t => t.checked && (defaultMap[t.id] === 'side' || t.category === 'side')) && 
-                    tasks.some(t => t.checked && (defaultMap[t.id] === 'lang' || t.category === 'lang')) && 
-                    tasks.some(t => t.checked && (defaultMap[t.id] === 'health' || t.category === 'health'));
-       if (!wasC) onCelebrate();
-    }
-    sync(updated, mood, isLazy);
-  };
-
-  return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <Card style={{ backgroundColor: theme.primary }} className="border-none text-white overflow-hidden relative p-8 shadow-2xl">
-         <div className="absolute top-0 right-0 p-8 opacity-10"><Trophy size={140} /></div>
-         <div className="relative z-10">
-            <div className="flex justify-between items-start mb-2">
-               <p className="text-[10px] font-black uppercase tracking-[0.4em] text-white/40">Manifestation Archive</p>
-               <div className="flex items-center gap-1.5 bg-amber-500 text-white px-3 py-1 rounded-full text-[9px] font-black animate-pulse shadow-lg shadow-amber-500/20">
-                  <Flame size={10} fill="white" /> {identityStats.streak} DAYS STREAK
-               </div>
-            </div>
-            <h3 className="text-4xl font-black text-white">{identityStats.fruits} <span className="text-xs text-white/50 font-bold uppercase tracking-widest ml-1">Fruits</span></h3>
-            <div className="grid grid-cols-3 gap-3 mt-8">
-               <StatItem label="副業" count={identityStats.side} title={getIdentityTitle('side', identityStats.side)} color="#cb914a" />
-               <StatItem label="語言" count={identityStats.lang} title={getIdentityTitle('lang', identityStats.lang)} color="#86a0bb" />
-               <StatItem label="健康" count={identityStats.health} title={getIdentityTitle('health', identityStats.health)} color="#5b8e7d" />
-            </div>
-         </div>
-      </Card>
-
-      <div className="text-center px-4">
-         <p className="text-xs font-medium italic opacity-40 leading-relaxed">「{dailyAffirmation}」</p>
-      </div>
-
-      <header className="flex justify-between items-center px-2">
-        <div className="relative group">
-           <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="bg-white/70 backdrop-blur-md border border-slate-200 rounded-2xl px-5 py-2.5 text-xs font-black outline-none shadow-sm transition-all focus:ring-2 focus:ring-amber-200" />
-           {isSyncing && <div className="absolute -top-1 -right-1 w-2 h-2 bg-amber-600 rounded-full animate-ping"></div>}
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => setIsEditing(!isEditing)} className={`p-2.5 rounded-2xl transition-all ${isEditing ? 'bg-amber-100 text-amber-700 shadow-inner' : 'bg-white text-slate-400 shadow-sm hover:bg-slate-50'}`}>
-            <Settings2 size={20} />
-          </button>
-          <button onClick={() => { const l = !isLazy; setIsLazy(l); sync(tasks, mood, l); }} className={`px-5 py-2.5 rounded-2xl text-[10px] font-black transition-all border ${isLazy ? 'bg-slate-800 text-white border-slate-800 shadow-lg' : 'bg-white text-slate-400 border-slate-200 shadow-sm'}`}>
-            {isLazy ? '🌙 秋眠' : '☕ 休息'}
-          </button>
-        </div>
-      </header>
-
-      {isEditing && (
-        <Card className="bg-[#fdfbf7] border-dashed border-2 space-y-6 animate-in slide-in-from-top-4 border-amber-200/50">
-          <div className="flex items-center gap-2 text-amber-800 font-black"><Settings2 size={16}/><span className="text-xs uppercase tracking-widest">任務架構調整</span></div>
-          <div className="flex flex-col gap-5">
-             <input value={newTask.label} onChange={e => setNewTask({...newTask, label: e.target.value})} placeholder="任務標題..." className="w-full bg-white border-none rounded-2xl px-6 py-4 text-sm font-bold shadow-sm" />
-             <div className="space-y-3">
-                <p className="text-[9px] font-black opacity-30 uppercase ml-2">歸屬類別</p>
-                <div className="flex flex-wrap gap-2">
-                   {[['side', '副業'], ['lang', '語言'], ['health', '健康'], ['other', '雜項']].map(([id, name]) => (
-                     <button key={id} onClick={() => setNewTask({...newTask, category: id})} className={`px-4 py-2.5 rounded-xl text-[10px] font-black border transition-all ${newTask.category === id ? 'bg-[#14233a] text-white border-[#14233a]' : 'bg-white text-slate-400 border-slate-200'}`}>{name}</button>
-                   ))}
+            if (loading) return (
+                <div className="min-h-screen flex flex-col items-center justify-center bg-[#f7f2ed]">
+                    <div className="w-12 h-12 border-4 border-[#14233a] border-t-transparent rounded-full animate-spin mb-6"></div>
+                    <div className="font-black tracking-[0.4em] text-[#14233a] animate-pulse uppercase text-sm">KANG'S 2026 Loading</div>
                 </div>
-             </div>
-             <div className="space-y-3">
-                <p className="text-[9px] font-black opacity-30 uppercase ml-2">循環機制</p>
-                <div className="flex gap-2">
-                   {['daily', 'weekly', 'once'].map(r => (
-                     <button key={r} onClick={() => setNewTask({...newTask, recurrence: r})} className={`flex-1 py-2.5 rounded-xl text-[9px] font-black border transition-all ${newTask.recurrence === r ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-slate-400 border-slate-200'}`}>{r === 'daily' ? '每天' : r === 'weekly' ? '每週' : '單次'}</button>
-                   ))}
-                </div>
-             </div>
-             <Button onClick={async () => {
-                if(!newTask.label) return;
-                const path = getPath('taskTemplates');
-                if(!path) return;
-                await addDoc(collection(db, path), { ...newTask, targetDate: selectedDate, dayOfWeek: new Date(selectedDate).getDay(), createdAt: serverTimestamp() });
-                setNewTask({ label: "", category: "side", recurrence: "daily" });
-             }} variant="primary" className="w-full py-4">部署至生命系統</Button>
-          </div>
-        </Card>
-      )}
+            );
 
-      <div className={`space-y-8 transition-all duration-700 ${isLazy ? 'opacity-30 blur-[6px] pointer-events-none scale-95 grayscale' : ''}`}>
-        {[['side', '副業發展', theme.accent], ['lang', '語言學習', theme.secondary], ['health', '身體健康', theme.success], ['other', '生活雜項', theme.border]].map(([id, name, color]) => {
-          const catTasks = tasks.filter(t => t.category === id);
-          if (catTasks.length === 0 && !isEditing) return null;
-          return (
-            <div key={id} className="space-y-4">
-               <h4 className="text-[11px] font-black uppercase tracking-[0.2em] opacity-30 px-4 flex items-center gap-3"><div className="w-2 h-2 rounded-full" style={{backgroundColor: color }}></div>{name}</h4>
-               <div className="space-y-3">
-                 {catTasks.map(t => (
-                   <div key={t.id} className="flex items-center gap-3 group">
-                     <div onClick={() => !isEditing && toggleTask(t.id)} className={`flex-1 flex items-start gap-5 p-7 rounded-[2.8rem] border transition-all ${t.checked ? 'bg-slate-100 border-transparent opacity-40 scale-[0.97]' : 'bg-white shadow-sm hover:translate-y-[-2px] hover:shadow-lg hover:border-amber-200'}`} style={{ borderColor: theme.border }}>
-                        <div className={`w-8 h-8 mt-0.5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${t.checked ? 'bg-[#14233a] border-[#14233a] rotate-[360deg]' : 'border-slate-300'}`}><CheckCircle2 size={18} className="text-white" /></div>
-                        <div className="flex-1">
-                           <div className="flex justify-between items-start">
-                              <p className="text-base font-black leading-tight text-slate-800">{t.label}</p>
-                              <span className="text-[8px] font-black uppercase bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-md text-slate-400 tracking-widest">{t.recurrence || 'DAILY'}</span>
-                           </div>
-                           <p className="text-[10px] font-bold opacity-30 mt-2 uppercase tracking-widest flex items-center gap-1">{t.recurrence !== 'once' && <Repeat size={10} className="text-amber-600"/>} {t.sub || '核心行為指標'}</p>
+            return (
+                <div className="max-w-md mx-auto min-h-screen pb-32 pt-8 px-4">
+                    {showCelebration && (
+                        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/90 backdrop-blur-2xl text-center p-10 animate-in" onClick={() => setShowCelebration(false)}>
+                            <div className="text-8xl mb-8">🍂</div>
+                            <h2 className="text-4xl font-black mb-2 text-[#14233a] tracking-tighter">意志的果實</h2>
+                            <p className="text-slate-500 italic">苦痛是短暫的，身分的轉變是永恆的。</p>
                         </div>
-                     </div>
-                     {isEditing && t.id.length > 10 && (
-                       <button onClick={async () => { const p = getPath('taskTemplates'); if(p) await deleteDoc(doc(db, p, t.id)); }} className="p-4 text-rose-400 hover:bg-rose-50 rounded-full transition-colors"><Trash2 size={22} /></button>
-                     )}
-                   </div>
-                 ))}
-               </div>
-            </div>
-          );
-        })}
-      </div>
+                    )}
+                    
+                    <header className="flex justify-between items-center mb-8 px-2">
+                        <div className="flex items-center gap-3">
+                            <div className="w-11 h-11 bg-[#14233a] rounded-2xl flex items-center justify-center shadow-xl">
+                                <i data-lucide="star" className="text-[#cb914a] fill-[#cb914a] w-5 h-5"></i>
+                            </div>
+                            <h1 className="text-2xl font-black tracking-tighter text-[#14233a]">KANG'S 2026</h1>
+                        </div>
+                    </header>
 
-      <div className="space-y-4 pb-12">
-        <label className="text-[10px] font-black uppercase tracking-widest opacity-30 ml-6 flex justify-between">此刻靈魂狀態 {lastSaved && <span className="text-emerald-600">已存入生命檔案 {lastSaved}</span>}</label>
-        <textarea value={mood} onChange={e => setMood(e.target.value)} onBlur={() => sync(tasks, mood, isLazy)} className="w-full h-40 bg-white border border-slate-100 rounded-[2.5rem] p-8 text-sm outline-none focus:ring-4 focus:ring-amber-50 shadow-inner leading-relaxed" placeholder="誠實地記錄下此刻..." />
-      </div>
-    </div>
-  );
-}
+                    <main className="space-y-8">
+                        {activeTab === 'today' && <TodayView user={user} logs={logs} templates={templates} getPath={getPath} onCelebrate={() => setShowCelebration(true)} seeds={seeds} />}
+                        {activeTab === 'reflect' && <ReflectView journals={journals} getPath={getPath} />}
+                        {activeTab === 'ai' && <AIView logs={logs} seeds={seeds} getPath={getPath} />}
+                    </main>
 
-function StatItem({ label, count, title, color }) {
-  return (
-    <div className="bg-white/5 rounded-2xl p-3 flex flex-col gap-1 border border-white/5 backdrop-blur-md">
-       <span className="text-[9px] font-black uppercase opacity-40">{label} {title}</span>
-       <span className="text-lg font-black" style={{ color }}>{count}</span>
-    </div>
-  );
-}
-
-// --- 留言板 ---
-function ReflectView({ db, user, getPath, journals, logs }) {
-  const [msg, setMsg] = useState("");
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [saving, setSaving] = useState(false);
-  const save = async () => {
-    if (!user || !msg.trim()) return;
-    const path = getPath('journalEntries');
-    if (!path) return;
-    setSaving(true);
-    try {
-      await addDoc(collection(db, path), { date: selectedDate, message: msg, createdAt: serverTimestamp() });
-      setMsg("");
-    } finally { setSaving(false); }
-  };
-  const combined = useMemo(() => {
-    const list = [...journals.map(j => ({ ...j, type: 'journal' })), ...logs.filter(l => l.mood).map(l => ({ id: `m-${l.date}`, date: l.date, mood: l.mood, type: 'mood' }))];
-    return list.sort((a,b) => b.date.localeCompare(a.date));
-  }, [journals, logs]);
-  return (
-    <div className="space-y-10 animate-in fade-in">
-      <Card className="space-y-6 bg-amber-50/20 border-amber-100/50 shadow-xl shadow-amber-900/5">
-        <div className="flex items-center gap-2 text-amber-800"><StickyNote size={18} /><h2 className="text-xl font-black tracking-tighter">與未來的對話</h2></div>
-        <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full bg-white border-none rounded-2xl p-4 text-xs font-black outline-none shadow-sm" />
-        <textarea value={msg} onChange={e => setMsg(e.target.value)} className="w-full h-40 bg-white border-none rounded-[2rem] p-7 text-sm leading-relaxed outline-none shadow-inner" placeholder="這段話，留給 2026 年底的你看..." />
-        <Button onClick={save} loading={saving} variant="accent" className="w-full text-xs font-black py-5 shadow-lg shadow-amber-200/50">封存時光留言</Button>
-      </Card>
-      <div className="space-y-6">
-        {combined.slice(0, 15).map(i => (
-          <div key={i.id} className="relative bg-white p-8 rounded-[2.5rem] border-[0.5px] border-slate-100 shadow-sm hover:border-amber-200 transition-all group">
-            <span className="text-[10px] font-black opacity-20 uppercase tracking-widest block mb-4">{i.date} {i.type === 'mood' ? '・ 心境快照' : '・ 時光信件'}</span>
-            <p className="text-base font-medium leading-relaxed text-slate-600">{i.message || i.mood}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// --- 成長曲線頁面 ---
-function AIView({ logs, journals, db, getPath, seeds }) {
-  const [res, setRes] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [wish, setWish] = useState("");
-  const [wishCategory, setWishCategory] = useState("side");
-  const heatMapData = useMemo(() => {
-    const days = {};
-    logs.forEach(l => {
-      const score = (l.tasks?.filter(t => t.checked).length || 0) + (l.mood ? 1 : 0);
-      days[l.date] = score;
-    });
-    return days;
-  }, [logs]);
-  return (
-    <div className="space-y-12 animate-in fade-in pb-32">
-      <section className="space-y-6">
-        <div className="flex justify-between items-end px-1">
-           <div><h3 className="text-2xl font-black tracking-tighter">2026 成長曲線</h3><p className="text-[10px] opacity-40 font-bold mt-1 uppercase tracking-[0.2em]">每一點亮起都是一次覺醒</p></div>
-           <Wind size={24} className="text-slate-300 animate-pulse" />
-        </div>
-        <Card className="overflow-x-auto p-8 bg-white/50 backdrop-blur-md">
-           <div className="flex gap-1.5 min-w-[650px]">
-              {Array.from({ length: 52 }).map((_, weekIndex) => (
-                <div key={weekIndex} className="flex flex-col gap-1.5">
-                  {Array.from({ length: 7 }).map((_, dayIndex) => {
-                    const d = new Date(2026, 0, 1 + (weekIndex * 7 + dayIndex));
-                    const dStr = d.toISOString().split('T')[0];
-                    const isToday = dStr === new Date().toISOString().split('T')[0];
-                    const score = heatMapData[dStr] || 0;
-                    const opacity = score === 0 ? 0.08 : score <= 2 ? 0.35 : score <= 4 ? 0.65 : 1;
-                    return (
-                      <div key={dayIndex} className={`w-4 h-4 rounded-[4px] transition-all hover:scale-150 hover:bg-amber-500 shadow-sm ${isToday ? 'ring-2 ring-amber-500 ring-offset-2 animate-pulse' : ''}`} style={{ backgroundColor: theme.primary, opacity }} title={`${dStr}: ${score} pt`}></div>
-                    );
-                  })}
+                    <nav className="fixed bottom-6 left-4 right-4 bg-white/80 backdrop-blur-xl border border-[#c0b8b4]/40 rounded-[2.8rem] py-5 px-10 shadow-2xl flex justify-between z-40">
+                        <NavBtn active={activeTab === 'today'} icon="check-circle-2" label="努力" onClick={() => setActiveTab('today')} />
+                        <NavBtn active={activeTab === 'reflect'} icon="message-square-quote" label="留言" onClick={() => setActiveTab('reflect')} />
+                        <NavBtn active={activeTab === 'ai'} icon="trending-up" label="成長" onClick={() => setActiveTab('ai')} />
+                    </nav>
                 </div>
-              ))}
-           </div>
-        </Card>
-      </section>
+            );
+        };
 
-      <section className="space-y-6">
-        <div className="flex justify-between items-center px-2">
-           <h3 className="text-xl font-black tracking-tighter flex items-center gap-2"><Flame size={22} className="text-orange-500" /> 顯化契約牆</h3>
-           <button onClick={async () => {
-              setLoading(true);
-              const r = await callGemini("我決定放下過去，從此刻重啟。請給我一段避風港式的靈魂肯定留言。");
-              setRes(r); setLoading(false);
-           }} className="flex items-center gap-1.5 px-4 py-1.5 bg-[#14233a] text-white rounded-full text-[9px] font-black active:scale-95 transition-all shadow-lg hover:bg-slate-800"><RefreshCw size={10} className={loading ? "animate-spin" : ""} /> 重啟靈魂節奏</button>
-        </div>
-        <Card className="space-y-6 bg-[#fdfbf7] border-none shadow-xl">
-           <div className="flex flex-col gap-4">
-              <input value={wish} onChange={e => setWish(e.target.value)} placeholder="靈魂深處的 2026 願望..." className="w-full bg-white border-none rounded-2xl px-7 py-5 text-sm font-bold shadow-inner" />
-              <div className="flex gap-3">
-                 {[['side', '副業'], ['lang', '語言'], ['health', '健康']].map(([id, name]) => (
-                   <button key={id} onClick={() => setWishCategory(id)} className={`flex-1 py-3 rounded-xl text-[10px] font-black border transition-all ${wishCategory === id ? 'bg-[#14233a] text-white shadow-lg' : 'bg-white text-slate-300'}`}>{name}</button>
-                 ))}
-                 <Button onClick={async () => {
-                    if(!wish) return;
-                    setLoading(true);
-                    const r = await callGemini(`靈魂願望：${wish}。類別：${wishCategory}。請生成一段極簡的身分認同契約。`);
-                    const p = getPath('seeds');
-                    if(p) await addDoc(collection(db, p), { title: wish, category: wishCategory, contract: r, createdAt: serverTimestamp() });
-                    setWish(""); setRes(r); setLoading(false);
-                 }} loading={loading} variant="accent" className="px-10">立約</Button>
-              </div>
-           </div>
-        </Card>
-        <div className="grid grid-cols-1 gap-6">
-          {seeds.map(s => (
-            <Card key={s.id} className="relative border-none bg-white shadow-2xl p-10 group overflow-hidden transition-all hover:scale-[1.01]">
-               <div className="relative z-10">
-                  <div className="flex justify-between items-start mb-6">
-                     <span className="text-[10px] font-black uppercase text-[#cb914a] tracking-widest bg-amber-50 px-4 py-1.5 rounded-full">{s.category} CONTRACT</span>
-                     <button onClick={async () => { const p = getPath('seeds'); if(p) await deleteDoc(doc(db, p, s.id)); }} className="text-slate-200 hover:text-rose-400"><Trash2 size={18} /></button>
-                  </div>
-                  <p className="text-2xl font-black mb-4 tracking-tighter text-slate-800">{s.title}</p>
-                  <p className="text-sm leading-relaxed opacity-70 italic font-medium border-l-4 border-amber-200 pl-6 text-slate-600">{s.contract}</p>
-               </div>
-            </Card>
-          ))}
-        </div>
-      </section>
-      {res && <Card className="animate-in slide-in-from-bottom-6 border-indigo-200 p-8 shadow-xl"><p className="text-base font-black italic text-indigo-900 text-center">「{res}」</p></Card>}
-    </div>
-  );
-}
+        const NavBtn = ({ active, icon, label, onClick }) => (
+            <button onClick={onClick} className={`flex flex-col items-center gap-1.5 transition-all ${active ? 'text-[#14233a] scale-110' : 'text-slate-400 opacity-60'}`}>
+                <i data-lucide={icon} className={`w-6 h-6 ${active ? 'stroke-[3]' : 'stroke-[2.5]'}`}></i>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em]">{label}</span>
+            </button>
+        );
 
-function FavoritesView({ favorites, db, getPath }) {
-  return (
-    <div className="space-y-10 animate-in fade-in pb-32">
-      <header className="flex justify-between items-center px-4">
-        <h2 className="text-3xl font-black tracking-tighter">靈魂收藏庫</h2>
-        <div className="w-14 h-14 rounded-full bg-indigo-50 flex items-center justify-center shadow-inner"><Bookmark size={28} className="text-indigo-600" /></div>
-      </header>
-      {favorites.length === 0 ? (
-        <div className="py-32 text-center flex flex-col items-center gap-8 opacity-10"><Sparkles size={100} /><p className="text-sm font-black uppercase tracking-[0.5em]">No Insights Stored</p></div>
-      ) : (
-        <div className="space-y-8">
-          {favorites.map(f => (
-            <Card key={f.id} className="relative bg-white shadow-2xl border-none p-12 group transition-all">
-              <div className="flex justify-between items-start mb-8">
-                <span className="text-[10px] font-black bg-[#14233a] text-white px-5 py-2 rounded-full uppercase tracking-widest">{f.range}</span>
-                <button onClick={async () => { const p = getPath('favoriteReviews'); if(p) await deleteDoc(doc(db, p, f.id)); }} className="text-slate-200 group-hover:text-rose-400 transition-colors"><Trash2 size={20} /></button>
-              </div>
-              <p className="text-xl leading-relaxed text-slate-700 font-bold">{f.content}</p>
-            </Card>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+        // --- 努力分頁內容 ---
+        function TodayView({ user, logs, templates, getPath, onCelebrate, seeds }) {
+            const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+            const [isEditing, setIsEditing] = useState(false);
+            
+            const stats = useMemo(() => {
+                const s = { fruits: 0, streak: 0 };
+                logs.forEach(l => {
+                    const checkedCount = l.tasks?.filter(t => t.checked).length || 0;
+                    if (checkedCount >= 3) s.fruits++;
+                });
+                return s;
+            }, [logs]);
+
+            useEffect(() => { lucide.createIcons(); }, [isEditing, selectedDate]);
+
+            return (
+                <div className="space-y-6 animate-in">
+                    <Card style={{ backgroundColor: theme.primary }} className="text-white p-9 relative overflow-hidden shadow-2xl border-none">
+                        <div className="absolute top-0 right-0 p-8 opacity-10 rotate-12"><i data-lucide="trophy" className="w-28 h-28"></i></div>
+                        <div className="relative z-10">
+                            <p className="text-[10px] font-black opacity-40 tracking-[0.4em] mb-2 uppercase">Identity Accumulation</p>
+                            <h3 className="text-5xl font-black">{stats.fruits} <span className="text-sm opacity-50 font-bold uppercase tracking-widest ml-1">Fruits</span></h3>
+                            <div className="mt-8 flex gap-2">
+                                <div className="bg-white/10 px-3 py-1.5 rounded-full text-[9px] font-black tracking-widest uppercase">Identity: Beginner</div>
+                            </div>
+                        </div>
+                    </Card>
+
+                    <div className="flex justify-between items-center px-2">
+                        <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="bg-white border border-[#c0b8b4]/30 rounded-2xl px-4 py-2 text-xs font-black shadow-sm outline-none" />
+                        <button onClick={() => setIsEditing(!isEditing)} className={`p-2.5 rounded-2xl transition-all ${isEditing ? 'bg-amber-100 text-amber-700' : 'bg-white shadow-sm text-slate-400'}`}>
+                             <i data-lucide="settings-2" className="w-5 h-5"></i>
+                        </button>
+                    </div>
+
+                    <div className="space-y-4 pt-10">
+                        <div className="text-center opacity-30">
+                            <i data-lucide="leaf" className="w-8 h-8 mx-auto mb-4 text-[#cb914a]"></i>
+                            <p className="text-xs italic leading-relaxed px-12">「在這裡，每一分累積都是寫給未來最美的留言。」</p>
+                            <p className="text-[9px] font-black uppercase mt-6 tracking-[0.3em]">系統連線成功・等待紀錄</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- 留言分頁內容 ---
+        function ReflectView({ journals, getPath }) {
+            const [msg, setMsg] = useState("");
+            const [saving, setSaving] = useState(false);
+
+            const save = async () => {
+                if (!msg.trim() || !window.fb) return;
+                setSaving(true);
+                const { db, addDoc, collection, serverTimestamp } = window.fb;
+                try {
+                    await addDoc(collection(db, getPath('journalEntries')), {
+                        message: msg,
+                        date: new Date().toISOString().split('T')[0],
+                        createdAt: serverTimestamp()
+                    });
+                    setMsg("");
+                } catch (e) { console.error(e); }
+                setSaving(false);
+            };
+
+            return (
+                <div className="space-y-10 animate-in">
+                    <Card className="bg-amber-50/20 border-amber-100 shadow-xl shadow-amber-900/5">
+                        <div className="flex items-center gap-2 text-amber-800 mb-5">
+                            <i data-lucide="sticky-note" className="w-5 h-5"></i>
+                            <h2 className="text-xl font-black tracking-tight">留言給未來</h2>
+                        </div>
+                        <textarea value={msg} onChange={e => setMsg(e.target.value)} className="w-full h-44 bg-white border-none rounded-[2rem] p-8 text-sm leading-relaxed outline-none shadow-inner resize-none focus:ring-2 focus:ring-amber-100 transition-all" placeholder="寫下一段想留給 2026 年底的自己..." />
+                        <button onClick={save} disabled={saving} className="w-full bg-[#cb914a] text-white rounded-2xl py-4.5 mt-5 font-black text-xs tracking-[0.3em] uppercase shadow-lg shadow-amber-200/50 active:scale-95 transition-all">
+                            {saving ? "封存中..." : "封存這段留言"}
+                        </button>
+                    </Card>
+                    
+                    <div className="space-y-6">
+                        {journals.length === 0 && <p className="text-center text-[10px] opacity-20 uppercase tracking-widest py-10">尚無封存留言</p>}
+                        {journals.map(j => (
+                            <div key={j.id} className="bg-white p-9 rounded-[2.8rem] border border-slate-100 shadow-sm transition-all hover:border-amber-200">
+                                <span className="text-[10px] font-black opacity-20 uppercase tracking-widest block mb-4">{j.date}</span>
+                                <p className="text-base text-slate-600 leading-relaxed">{j.message}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        // --- 成長曲線內容 ---
+        function AIView({ logs, seeds, getPath }) {
+            const [loading, setLoading] = useState(false);
+            const [res, setRes] = useState("");
+
+            const handleReset = async () => {
+                setLoading(true);
+                const r = await callGemini("我決定放下過去的中斷，從此刻重啟。請給我一段避風港式的靈魂肯定留言。");
+                setRes(r);
+                setLoading(false);
+            };
+
+            return (
+                <div className="space-y-12 animate-in pb-10">
+                    <section className="space-y-6">
+                        <div className="flex justify-between items-end px-2">
+                            <div>
+                                <h3 className="text-2xl font-black tracking-tighter text-[#14233a]">2026 成長曲線</h3>
+                                <p className="text-[10px] opacity-40 font-bold mt-1 uppercase tracking-widest">每一格亮起都是靈魂的覺醒</p>
+                            </div>
+                            <i data-lucide="wind" className="text-slate-300 w-6 h-6 animate-pulse"></i>
+                        </div>
+                        <Card className="overflow-x-auto p-8 bg-white/50 backdrop-blur-md border-[#c0b8b4]/30">
+                           <div className="flex gap-1.5 min-w-[500px]">
+                              {Array.from({ length: 25 }).map((_, i) => (
+                                <div key={i} className="flex flex-col gap-1.5">
+                                  {Array.from({ length: 7 }).map((_, j) => (
+                                    <div key={j} className="w-4 h-4 rounded-[4px] bg-[#14233a]/5 transition-all hover:bg-[#cb914a]/30"></div>
+                                  ))}
+                                </div>
+                              ))}
+                           </div>
+                        </Card>
+                    </section>
+
+                    <section className="space-y-6">
+                        <div className="flex justify-between items-center px-2">
+                            <h3 className="text-xl font-black tracking-tighter flex items-center gap-2"><i data-lucide="flame" className="text-orange-500 w-5 h-5"></i> 顯化契約牆</h3>
+                            <button onClick={handleReset} className="flex items-center gap-1.5 px-4 py-1.5 bg-[#14233a] text-white rounded-full text-[9px] font-black active:scale-95 shadow-lg">
+                                <i data-lucide="refresh-cw" className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`}></i> 重啟靈魂節奏
+                            </button>
+                        </div>
+                        <div className="py-24 text-center border-2 border-dashed border-slate-200 rounded-[3.5rem] text-slate-300">
+                            <p className="text-xs italic leading-relaxed px-10">在這裡立下契約，將願望轉化為骨血。</p>
+                        </div>
+                    </section>
+                    {res && <Card className="border-[#cb914a] p-10 shadow-2xl animate-in bg-[#fffefc]"><p className="text-lg font-black italic text-[#14233a] text-center leading-relaxed">「{res}」</p></Card>}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+
+        // 自動觀察 DOM 變化來渲染 Lucide 圖示
+        const observer = new MutationObserver(() => lucide.createIcons());
+        observer.observe(document.getElementById('root'), { childList: true, subtree: true });
+    </script>
+</body>
+</html>
