@@ -3,15 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>KANG'S 2026 生命建築師</title>
+    <title>今年也每天進步一點點</title>
     
+    <!-- --- 手機主畫面圖示 (PWA 設定) --- -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="KANG's2026">
+    
+    <!-- 這裡就是 ICON 的程式碼位置 -->
+    <!-- 請確保您的 GitHub 根目錄有一張名為 icon.png 的圖片 -->
+    <link rel="apple-touch-icon" href="./icon.png">
+    <link rel="icon" type="image/png" href="./icon.png">
+    
+    <!-- 如果您想直接用網路圖片網址，可以把上面的 href 改成網址，例如：
+    <link rel="apple-touch-icon" href="https://example.com/my-icon.png"> 
+    -->
+
     <!-- 核心環境載入 -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Firebase SDK (Compat 版本) -->
+    <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
@@ -45,7 +59,7 @@
             transform-origin: 50% 50%;
         }
         .glass-card {
-            background: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.85);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
             border: 1px solid rgba(203, 145, 74, 0.2);
@@ -58,7 +72,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- 1. Firebase 配置 (已填入您的金鑰) ---
+        // --- 1. Firebase 配置 ---
         const firebaseConfig = {
             apiKey: "AIzaSyDLeH52pL_lGEhj41ejj59nEL5ge4MxsGk",
             authDomain: "kangs-2026.firebaseapp.com",
@@ -126,6 +140,7 @@
                 '休閒樂趣': '#c0b8b4'
             };
 
+            // 監聽登入狀態
             useEffect(() => {
                 const unsubscribe = auth.onAuthStateChanged((u) => {
                     setUser(u);
@@ -134,6 +149,7 @@
                 return () => unsubscribe();
             }, []);
 
+            // 資料同步
             useEffect(() => {
                 if (!user) return;
                 const userRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid);
@@ -149,7 +165,7 @@
                         ];
                         defaults.forEach(d => userRef.collection('tasks').add(d));
                     }
-                });
+                }, err => console.error("Firebase Sync Error:", err));
 
                 const unsubVisions = userRef.collection('visions').onSnapshot(snap => setVisions(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
                 const unsubGratitude = userRef.collection('gratitude').orderBy('createdAt', 'desc').onSnapshot(snap => setGratitude(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
@@ -172,9 +188,14 @@
                     }
                 } catch (err) {
                     let msg = err.message;
-                    if (err.code === 'auth/email-already-in-use') msg = "此帳號已被註冊，請切換至登入模式。";
-                    if (err.code === 'auth/wrong-password') msg = "密碼錯誤，請重新輸入。";
-                    if (err.code === 'auth/user-not-found') msg = "找不到此帳號，請先註冊。";
+                    // --- 修正報錯引導邏輯 ---
+                    if (err.code === 'auth/email-already-in-use') {
+                        msg = "此信箱已註冊過！請點擊下方切換為「登入模式」。";
+                    } else if (err.code === 'auth/wrong-password') {
+                        msg = "密碼錯誤，請再試一次。";
+                    } else if (err.code === 'auth/user-not-found') {
+                        msg = "找不到帳號？請先點擊下方切換為「註冊模式」。";
+                    }
                     setErrorMsg(msg);
                 }
             };
@@ -201,26 +222,32 @@
                 </button>
             );
 
-            if (loading) return <div className="h-screen flex items-center justify-center bg-[#f7f2ed] font-black text-[#cb914a] animate-pulse text-lg">同步 2026 頻率中...</div>;
+            if (loading) return <div className="h-screen flex items-center justify-center bg-[#f7f2ed] font-black text-[#cb914a] animate-pulse text-lg tracking-widest">同步 2026 頻率中...</div>;
 
+            // 登入/註冊介面
             if (!user) return (
                 <div className="min-h-screen flex items-center justify-center bg-[#f7f2ed] px-8 py-12">
                     <div className="w-full max-w-sm glass-card p-10 rounded-[3.5rem] shadow-2xl space-y-8 fade-entry">
                         <div className="text-center space-y-2">
-                            <h1 className="text-3xl font-black text-[#14233a] tracking-tighter">生命建築師</h1>
-                            <p className="text-[10px] text-[#cb914a] font-bold uppercase tracking-[0.4em]">2026 實相顯化系統</p>
+                            <h1 className="text-3xl font-black text-[#14233a] tracking-tighter uppercase">KANG's 2026</h1>
+                            <p className="text-[10px] text-[#cb914a] font-bold uppercase tracking-[0.4em]">每天進步一點點</p>
                         </div>
                         <form onSubmit={handleAuthAction} className="space-y-4">
+                            <div className="text-center mb-2">
+                                <span className={`text-[11px] font-black px-4 py-1 rounded-full ${!isRegistering ? 'bg-[#14233a] text-white' : 'text-[#86a0bb]'}`}>登入</span>
+                                <span className="mx-2 text-[#c0b8b4]">|</span>
+                                <span className={`text-[11px] font-black px-4 py-1 rounded-full ${isRegistering ? 'bg-[#14233a] text-white' : 'text-[#86a0bb]'}`}>註冊</span>
+                            </div>
                             <input type="email" placeholder="電子信箱" value={email} onChange={e => setEmail(e.target.value)} required className="w-full p-4 bg-[#f7f2ed] border-none rounded-2xl text-sm font-bold shadow-inner focus:ring-1 ring-[#cb914a]" />
                             <input type="password" placeholder="密碼" value={password} onChange={e => setPassword(e.target.value)} required className="w-full p-4 bg-[#f7f2ed] border-none rounded-2xl text-sm font-bold shadow-inner focus:ring-1 ring-[#cb914a]" />
-                            {errorMsg && <p className="text-red-400 text-[10px] font-bold px-2">{errorMsg}</p>}
-                            <button type="submit" className="w-full py-4 bg-[#14233a] text-white rounded-2xl font-black shadow-lg active:scale-95 transition-all">
-                                {isRegistering ? '註冊新頻率' : '進入實相空間'}
+                            {errorMsg && <p className="text-red-500 text-[10px] font-black px-2 leading-relaxed text-center">{errorMsg}</p>}
+                            <button type="submit" className="w-full py-4 bg-[#14233a] text-white rounded-2xl font-black shadow-lg active:scale-95 transition-all mt-2">
+                                {isRegistering ? '啟動註冊' : '登入空間'}
                             </button>
                         </form>
-                        <div className="text-center">
+                        <div className="text-center pt-2 border-t border-black/5">
                             <button onClick={() => { setIsRegistering(!isRegistering); setErrorMsg(''); }} className="text-[11px] font-black text-[#86a0bb] uppercase tracking-widest border-b border-[#86a0bb]/30 pb-1">
-                                {isRegistering ? '已有帳號？前往登入' : '第一次使用？點此註冊'}
+                                {isRegistering ? '已有帳號？點此切換登入' : '第一次使用？點此切換註冊'}
                             </button>
                         </div>
                     </div>
@@ -228,11 +255,11 @@
             );
 
             return (
-                <div className="min-h-screen bg-[#f7f2ed] text-[#2d2d2d] font-sans">
+                <div className="min-h-screen bg-[#f7f2ed] text-[#2d2d2d] font-sans pb-32">
                     <header className="sticky top-0 z-50 bg-[#f7f2ed]/70 backdrop-blur-xl border-b-[0.5px] border-[#c0b8b4] p-6 flex justify-between items-center">
                         <div>
                             <h1 className="text-2xl font-black text-[#14233a] tracking-tight">KANG'S 2026</h1>
-                            <p className="text-[10px] text-[#cb914a] font-bold tracking-[0.2em] uppercase">成為喜歡的自己</p>
+                            <p className="text-[10px] text-[#cb914a] font-bold tracking-[0.2em] uppercase">KANG'S 2026 專屬APP</p>
                         </div>
                         <div className="flex items-center gap-4">
                             <button onClick={() => auth.signOut()} className="text-[#c0b8b4] hover:text-[#14233a] transition-colors"><Icons.Logout size={20} /></button>
@@ -242,11 +269,11 @@
                         </div>
                     </header>
 
-                    <main className="max-w-xl mx-auto p-6 pb-40">
+                    <main className="max-w-xl mx-auto p-6">
                         {activeTab === 'daily' && <DailyView selectedDate={selectedDate} setSelectedDate={setSelectedDate} tasks={tasks} onToggle={handleTaskToggle} moodLogs={moodLogs} updateMood={(m) => db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('moods').doc(selectedDate).set({ mood: m, updatedAt: new Date().toISOString() })} vision={activeVision} />}
                         {activeTab === 'matrix' && <ProgressView tasks={tasks} vision={activeVision} categories={categories} colors={categoryColors} />}
                         {activeTab === 'tasks' && <TaskManagement tasks={tasks} saveVision={saveVision} vision={activeVision} db={db} appId={appId} user={user} categories={categories} />}
-                        {activeTab === 'gratitude' && <GratitudeJar gratitude={gratitude} db={db} appId={appId} user={user} selectedDate={selectedDate} />}
+                        {activeTab === 'gratitude' && <GratitudeBox gratitude={gratitude} db={db} appId={appId} user={user} selectedDate={selectedDate} />}
                         {activeTab === 'future' && <LetterBoard letters={letters} db={db} appId={appId} user={user} />}
                     </main>
 
@@ -268,7 +295,7 @@
 
             return (
                 <div className="space-y-6 fade-entry">
-                    <div className="relative w-full aspect-[9/16] max-h-[80vh] rounded-[2.5rem] overflow-hidden shadow-2xl border-[0.5px] border-[#c0b8b4] bg-white mx-auto">
+                    <div className="relative w-full aspect-[9/16] max-h-[85vh] rounded-[2.5rem] overflow-hidden shadow-2xl border-[0.5px] border-[#c0b8b4] bg-white mx-auto">
                         {vision?.base64 ? (
                             <img src={vision.base64} className="w-full h-full object-cover" />
                         ) : (
@@ -350,12 +377,12 @@
             }, [tasks, categories]);
 
             return (
-                <div className="space-y-8 fade-entry">
+                <div className="space-y-8 fade-entry pb-10">
                     <section className="bg-[#14233a] p-10 rounded-[3.5rem] text-white shadow-2xl relative overflow-hidden text-center">
                         <div className="absolute top-0 right-0 p-8 opacity-10"><Icons.Sparkles size={140} /></div>
                         <p className="text-[11px] text-[#cb914a] font-black uppercase tracking-[0.4em] mb-3">年度總顯化率</p>
                         <h3 className="text-6xl font-black mb-10 tracking-tighter">{overallProgress.toFixed(1)}%</h3>
-                        <div className="relative w-full aspect-[9/16] max-h-[70vh] rounded-[2.5rem] overflow-hidden bg-white/5 border border-white/10 mb-10 mx-auto shadow-inner">
+                        <div className="relative w-full aspect-[9/16] max-h-[65vh] rounded-[2.5rem] overflow-hidden bg-white/5 border border-white/10 mb-10 mx-auto shadow-inner">
                            {vision?.base64 ? <img src={vision.base64} className="w-full h-full object-cover transition-all duration-1000" style={{ filter: `grayscale(${100 - overallProgress}%) brightness(${0.7 + (overallProgress/100) * 0.3})` }} /> : <div className="flex items-center justify-center h-full opacity-10"><Icons.Image size={64} /></div>}
                         </div>
                         <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden shadow-inner p-0.5">
@@ -364,7 +391,7 @@
                     </section>
 
                     <div className="space-y-4">
-                        <h4 className="text-[12px] font-black text-[#14233a] uppercase px-4 tracking-[0.3em] text-center mb-6">各項目狀態</h4>
+                        <h4 className="text-[12px] font-black text-[#14233a] uppercase px-4 tracking-[0.3em] text-center mb-6">今年的目標狀態</h4>
                         <div className="grid grid-cols-1 gap-4">
                             {categoryData.map(cd => (
                                 <div key={cd.name} className="glass-card p-6 rounded-[3rem] shadow-sm flex items-center justify-between group transition-all hover:shadow-md">
@@ -432,7 +459,7 @@
             };
 
             return (
-                <div className="space-y-8 fade-entry">
+                <div className="space-y-8 fade-entry pb-10">
                     <section className="bg-white p-8 rounded-[3rem] border-[0.5px] border-[#cb914a] space-y-6 shadow-sm">
                         <h3 className="font-black text-lg flex items-center gap-3 text-[#14233a]"><Icons.Image size={20} className="text-[#cb914a]"/>願景藍圖設定</h3>
                         <div className="space-y-4">
@@ -445,23 +472,29 @@
                     </section>
                     
                     <section className="bg-white p-8 rounded-[3rem] border-[0.5px] border-[#c0b8b4] space-y-4 shadow-sm">
-                        <h3 className="font-black text-lg text-[#14233a]">新增生命目標</h3>
+                        <h3 className="font-black text-lg text-[#14233a]">目標</h3>
                         <input value={newTitle} onChange={e => setNewTitle(e.target.value)} className="w-full p-4 rounded-2xl bg-[#f7f2ed] border-none font-bold text-sm shadow-inner" placeholder="目標名稱..." />
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
                                 <p className="text-[9px] font-bold px-2 text-[#86a0bb] uppercase">類別</p>
-                                <select value={newCat} onChange={e => setNewCat(e.target.value)} className="w-full p-3 bg-[#f7f2ed] rounded-xl text-[10px] font-black border-none">{categories.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                                <select value={newCat} onChange={e => setNewCat(e.target.value)} className="w-full p-3 bg-[#f7f2ed] rounded-xl text-[10px] font-black border-none appearance-none">
+                                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
                             </div>
                             <div className="space-y-1">
                                 <p className="text-[9px] font-bold px-2 text-[#86a0bb] uppercase">規模</p>
-                                <select value={newType} onChange={e => setNewType(e.target.value)} className="w-full p-3 bg-[#f7f2ed] rounded-xl text-[10px] font-black border-none"><option value="大項目">大項目</option><option value="小項目">小項目</option></select>
+                                <select value={newType} onChange={e => setNewType(e.target.value)} className="w-full p-3 bg-[#f7f2ed] rounded-xl text-[10px] font-black border-none appearance-none">
+                                    <option value="大項目">大項目</option><option value="小項目">小項目</option>
+                                </select>
                             </div>
                             <div className="space-y-1">
                                 <p className="text-[9px] font-bold px-2 text-[#86a0bb] uppercase">週期</p>
-                                <select value={newFreq} onChange={e => setNewFreq(e.target.value)} className="w-full p-3 bg-[#f7f2ed] rounded-xl text-[10px] font-black border-none"><option value="每日">每日</option><option value="每週">每週</option><option value="每月">每月</option></select>
+                                <select value={newFreq} onChange={e => setNewFreq(e.target.value)} className="w-full p-3 bg-[#f7f2ed] rounded-xl text-[10px] font-black border-none appearance-none">
+                                    <option value="每日">每日</option><option value="每週">每週</option><option value="每月">每月</option>
+                                </select>
                             </div>
                             <div className="space-y-1">
-                                <p className="text-[9px] font-bold px-2 text-[#86a0bb] uppercase">顯化門檻</p>
+                                <p className="text-[9px] font-bold px-2 text-[#86a0bb] uppercase">目標達成次數</p>
                                 <input type="number" value={newTarget} onChange={e => setNewTarget(e.target.value)} className="w-full p-3 rounded-xl bg-[#f7f2ed] border-none text-[10px] font-black" />
                             </div>
                         </div>
@@ -484,7 +517,7 @@
         }
 
         // --- 子組件：感恩 ---
-        function GratitudeJar({ gratitude, db, appId, user, selectedDate }) {
+        function GratitudeBox({ gratitude, db, appId, user, selectedDate }) {
             const [text, setText] = useState('');
             return (
                 <div className="space-y-8 fade-entry pb-10 text-center">
