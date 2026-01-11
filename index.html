@@ -11,7 +11,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Firebase SDK (v11) -->
+    <!-- Firebase SDK (v11 compat) -->
     <script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore-compat.js"></script>
@@ -27,6 +27,7 @@
             font-family: 'Noto Sans TC', sans-serif; 
             -webkit-tap-highlight-color: transparent; 
             background-color: #f7f2ed;
+            margin: 0;
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         input[type="date"]::-webkit-inner-spin-button,
@@ -39,18 +40,18 @@
 <body>
     <div id="root"></div>
 
-    <!-- 這是您問的標籤：它告訴瀏覽器這段代碼需要 Babel 翻譯成網頁看得懂的樣子 -->
     <script type="text/babel">
-        // 從全域變數中取出 React 功能
+        // 從全域變數中取出功能
         const { useState, useEffect, useMemo, useRef } = React;
+        // 在網頁版 CDN 中，lucide-react 的全域變數通常是 LucideReact
         const { 
             Calendar, Heart, Star, Send, Trash2, Plus, Edit2,
             CheckCircle2, Flame, Award, Settings, BookOpen,
             Coffee, Globe, Activity, MessageSquare, ChevronLeft, ChevronRight, Save, X, Sparkles, Upload, Image: ImageIcon
-        } = lucide;
+        } = LucideReact;
 
         // --- 1. 這裡填入你的 Firebase 金鑰 ---
-     const firebaseConfig = {
+      const firebaseConfig = {
   apiKey: "AIzaSyDLeH52pL_lGEhj41ejj59nEL5ge4MxsGk",
   authDomain: "kangs-2026.firebaseapp.com",
   projectId: "kangs-2026",
@@ -60,8 +61,10 @@
 };
 
 
-        // 初始化 Firebase
-        firebase.initializeApp(firebaseConfig);
+        // 初始化 Firebase (如果尚未初始化)
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
         const auth = firebase.auth();
         const db = firebase.firestore();
         const appId = "kang2026";
@@ -78,19 +81,19 @@
             const [moodLogs, setMoodLogs] = useState({});
             const [loading, setLoading] = useState(true);
 
-            // 身份驗證
             useEffect(() => {
                 const unsubscribe = auth.onAuthStateChanged((u) => {
                     if (u) {
                         setUser(u);
                     } else {
-                        auth.signInAnonymously();
+                        auth.signInAnonymously().catch(err => {
+                            console.error("匿名登入失敗，請檢查 Firebase Console 是否開啟 Anonymous 驗證", err);
+                        });
                     }
                 });
                 return () => unsubscribe();
             }, []);
 
-            // 資料同步
             useEffect(() => {
                 if (!user) return;
                 const baseRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid);
@@ -98,25 +101,25 @@
                 const unsubTasks = baseRef.collection('tasks').onSnapshot(snap => {
                     setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() })));
                     setLoading(false);
-                });
+                }, err => console.error("Firestore Tasks 讀取失敗:", err));
 
                 const unsubVisions = baseRef.collection('visions').onSnapshot(snap => {
                     setVisions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                });
+                }, err => console.error("Firestore Visions 讀取失敗:", err));
 
                 const unsubGratitude = baseRef.collection('gratitude').onSnapshot(snap => {
                     setGratitude(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                });
+                }, err => console.error("Firestore Gratitude 讀取失敗:", err));
 
                 const unsubLetters = baseRef.collection('letters').orderBy('createdAt', 'desc').onSnapshot(snap => {
                     setLetters(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                });
+                }, err => console.error("Firestore Letters 讀取失敗:", err));
 
                 const unsubMood = baseRef.collection('moods').onSnapshot(snap => {
                     const moods = {};
                     snap.docs.forEach(d => { moods[d.id] = d.data(); });
                     setMoodLogs(moods);
-                });
+                }, err => console.error("Firestore Moods 讀取失敗:", err));
 
                 return () => {
                     unsubTasks(); unsubVisions(); unsubGratitude(); unsubLetters(); unsubMood();
@@ -125,17 +128,20 @@
 
             const handleTaskToggle = async (task) => {
                 const dates = task.completedDates || [];
-                const newDates = dates.includes(selectedDate) 
+                const isCompleted = dates.includes(selectedDate);
+                const newDates = isCompleted 
                     ? dates.filter(d => d !== selectedDate) 
                     : [...dates, selectedDate];
+                
                 await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('tasks').doc(task.id).update({
                     completedDates: newDates
                 });
             };
 
             if (loading) return (
-                <div className="flex items-center justify-center h-screen bg-[#f7f2ed] text-[#14233a]">
-                    <div className="animate-bounce font-black tracking-tighter text-lg">正在建構您的實相空間...</div>
+                <div className="flex flex-col items-center justify-center h-screen bg-[#f7f2ed] text-[#14233a]">
+                    <div className="animate-bounce font-black tracking-tighter text-lg">正在建構您的實像空間...</div>
+                    <p className="text-xs mt-4 opacity-50">若長時間沒反應，請檢查瀏覽器 Console 報錯</p>
                 </div>
             );
 
@@ -170,7 +176,7 @@
             );
         }
 
-        // --- 子組件定義 (省略重複邏輯以保持整潔，但功能完全保留) ---
+        // --- 子組件定義 ---
 
         function NavBtn({ active, onClick, icon: IconComp, label }) {
             return (
@@ -185,6 +191,18 @@
             const dayTasks = tasks.filter(t => t.isRecurring || t.createdAt?.startsWith(selectedDate));
             const currentMood = moodLogs[selectedDate]?.mood || null;
 
+            const changeDate = (offset) => {
+                let d = new Date(selectedDate);
+                d.setDate(d.getDate() + offset);
+                setSelectedDate(d.toISOString().split('T')[0]);
+            };
+
+            const updateMood = async (mood) => {
+                await db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('moods').doc(selectedDate).set({
+                    mood, updatedAt: new Date().toISOString()
+                });
+            };
+
             return (
                 <div className="space-y-8">
                     {vision?.base64 && (
@@ -195,19 +213,26 @@
                         </div>
                     )}
                     <div className="bg-white p-6 rounded-[2.5rem] border-[0.5px] border-[#c0b8b4] flex items-center justify-between shadow-sm">
-                        <button onClick={() => { let d = new Date(selectedDate); d.setDate(d.getDate()-1); setSelectedDate(d.toISOString().split('T')[0]); }}><ChevronLeft/></button>
+                        <button onClick={() => changeDate(-1)}><ChevronLeft/></button>
                         <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="font-black text-lg border-none bg-transparent text-center" />
-                        <button onClick={() => { let d = new Date(selectedDate); d.setDate(d.getDate()+1); setSelectedDate(d.toISOString().split('T')[0]); }}><ChevronRight/></button>
+                        <button onClick={() => changeDate(1)}><ChevronRight/></button>
+                    </div>
+                    <div className="flex justify-around bg-white p-4 rounded-[2rem] border-[0.5px] border-[#c0b8b4]">
+                        {['🌤️', '☁️', '🌧️', '⚡', '🌙'].map(m => (
+                            <button key={m} onClick={() => updateMood(m)} className={`text-2xl transition-all ${currentMood === m ? 'scale-125' : 'opacity-20 grayscale'}`}>{m}</button>
+                        ))}
                     </div>
                     <div className="space-y-4">
-                        {dayTasks.map(t => (
-                            <div key={t.id} onClick={() => onToggle(t)} className={`p-5 rounded-[2.5rem] border-[0.5px] transition-all cursor-pointer ${t.completedDates?.includes(selectedDate) ? 'bg-[#5b8e7d] text-white' : 'bg-white'}`}>
-                                <div className="flex justify-between items-center">
+                        {dayTasks.length === 0 ? (
+                            <div className="text-center py-10 opacity-30 text-sm">今日尚無目標</div>
+                        ) : (
+                            dayTasks.map(t => (
+                                <div key={t.id} onClick={() => onToggle(t)} className={`p-5 rounded-[2.5rem] border-[0.5px] transition-all cursor-pointer flex justify-between items-center ${t.completedDates?.includes(selectedDate) ? 'bg-[#5b8e7d] text-white border-transparent' : 'bg-white border-[#c0b8b4]'}`}>
                                     <div className="font-bold">{t.title}</div>
-                                    <CheckCircle2 />
+                                    <CheckCircle2 size={20} />
                                 </div>
-                            </div>
-                        ))}
+                            ))
+                        )}
                     </div>
                 </div>
             );
@@ -216,7 +241,7 @@
         function MatrixView({ tasks, vision }) {
             const overallProgress = useMemo(() => {
                 if (tasks.length === 0) return 0;
-                const totalTarget = tasks.reduce((acc, t) => acc + (t.targetCount || 100), 0);
+                const totalTarget = tasks.reduce((acc, t) => acc + (parseInt(t.targetCount) || 100), 0);
                 const totalDone = tasks.reduce((acc, t) => acc + (t.completedDates?.length || 0), 0);
                 return Math.min((totalDone / totalTarget) * 100, 100);
             }, [tasks]);
@@ -224,9 +249,14 @@
             return (
                 <div className="space-y-8">
                     <section className="bg-[#14233a] p-8 rounded-[3.5rem] text-white space-y-4 shadow-xl text-center">
+                        <p className="text-xs text-[#cb914a] font-bold uppercase tracking-widest">年度顯化進度</p>
                         <h3 className="text-4xl font-black">{overallProgress.toFixed(1)}%</h3>
-                        <div className="relative w-full aspect-[3/4] rounded-[2.5rem] overflow-hidden bg-white/5">
-                            {vision?.base64 && <img src={vision.base64} className="w-full h-full object-cover" style={{ filter: `grayscale(${100 - overallProgress}%)` }} />}
+                        <div className="relative w-full aspect-[3/4] rounded-[2.5rem] overflow-hidden bg-white/5 border border-white/10">
+                            {vision?.base64 ? (
+                                <img src={vision.base64} className="w-full h-full object-cover transition-all duration-1000" style={{ filter: `grayscale(${100 - overallProgress}%)` }} />
+                            ) : (
+                                <div className="flex items-center justify-center h-full opacity-20"><ImageIcon size={48}/></div>
+                            )}
                         </div>
                         <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
                             <div className="h-full bg-[#cb914a] transition-all duration-1000" style={{ width: `${overallProgress}%` }} />
@@ -241,6 +271,7 @@
             const fileInputRef = useRef(null);
 
             const add = async () => {
+                if (!title) return;
                 await db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('tasks').add({
                     title, targetCount: 100, completedDates: [], createdAt: new Date().toISOString(), isRecurring: true, category: '目標'
                 });
@@ -249,6 +280,7 @@
 
             const handleUpload = (e) => {
                 const file = e.target.files[0];
+                if (!file) return;
                 const reader = new FileReader();
                 reader.onloadend = () => {
                     db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('visions').doc('primary').set({
@@ -260,22 +292,24 @@
 
             return (
                 <div className="space-y-6">
-                    <section className="bg-white p-8 rounded-[3rem] border-[0.5px] border-[#cb914a] space-y-4">
+                    <section className="bg-white p-8 rounded-[3rem] border-[0.5px] border-[#cb914a] space-y-4 shadow-sm">
                         <h3 className="font-black text-lg">願景設定</h3>
                         <input type="file" ref={fileInputRef} onChange={handleUpload} className="hidden" accept="image/*" />
-                        <button onClick={() => fileInputRef.current.click()} className="w-full bg-[#14233a] text-white p-4 rounded-2xl font-black flex items-center justify-center gap-2"><Upload size={18} /> 上傳願景圖</button>
+                        <button onClick={() => fileInputRef.current.click()} className="w-full bg-[#14233a] text-white p-4 rounded-2xl font-black flex items-center justify-center gap-2 transition-all active:scale-95"><Upload size={18} /> 上傳願景圖</button>
                     </section>
-                    <section className="bg-white p-8 rounded-[3rem] border-[0.5px] border-[#c0b8b4] space-y-4">
+                    <section className="bg-white p-8 rounded-[3rem] border-[0.5px] border-[#c0b8b4] space-y-4 shadow-sm">
                         <h3 className="font-black text-lg">新增目標</h3>
-                        <input value={title} onChange={e => setTitle(e.target.value)} className="w-full p-4 rounded-2xl bg-[#f7f2ed] border-none" placeholder="輸入計畫名稱" />
-                        <button onClick={add} className="w-full bg-[#cb914a] text-white p-4 rounded-2xl font-black shadow-lg">啟動新目標</button>
+                        <input value={title} onChange={e => setTitle(e.target.value)} className="w-full p-4 rounded-2xl bg-[#f7f2ed] border-none text-sm font-bold shadow-inner" placeholder="輸入計畫名稱" />
+                        <button onClick={add} className="w-full bg-[#cb914a] text-white p-4 rounded-2xl font-black shadow-lg transition-all active:scale-95">啟動新目標</button>
                     </section>
-                    {tasks.map(t => (
-                        <div key={t.id} className="bg-white p-5 rounded-[2rem] flex justify-between items-center border-[0.5px]">
-                            <span className="font-bold">{t.title}</span>
-                            <button onClick={() => db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('tasks').doc(t.id).delete()}><Trash2 size={18} /></button>
-                        </div>
-                    ))}
+                    <div className="space-y-4">
+                        {tasks.map(t => (
+                            <div key={t.id} className="bg-white p-5 rounded-[2rem] flex justify-between items-center border-[0.5px] border-[#c0b8b4]">
+                                <span className="font-bold text-sm">{t.title}</span>
+                                <button onClick={() => db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('tasks').doc(t.id).delete()} className="text-[#c0b8b4] hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             );
         }
@@ -283,17 +317,19 @@
         function GratitudeBox({ gratitude, userId }) {
             const [text, setText] = useState('');
             const add = async () => {
+                if (!text) return;
                 await db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('gratitude').add({ text, createdAt: new Date().toISOString() });
                 setText('');
             };
             return (
                 <div className="space-y-6">
-                    <div className="h-64 bg-[#14233a] rounded-[3rem] flex flex-col items-center justify-center text-white relative">
-                        <div className="absolute top-6 bg-[#cb914a] px-4 py-1 rounded-full text-[10px]">2027 解鎖</div>
-                        <div className="text-4xl">✨ {gratitude.length}</div>
+                    <div className="h-64 bg-[#14233a] rounded-[3rem] flex flex-col items-center justify-center text-white relative shadow-xl overflow-hidden">
+                        <div className="absolute top-6 bg-[#cb914a] px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">2027 解鎖</div>
+                        <div className="text-4xl flex items-center gap-2"><Star fill="#cb914a" className="text-[#cb914a]"/> {gratitude.length}</div>
+                        <p className="text-[10px] mt-4 opacity-40">已蒐集的微光</p>
                     </div>
-                    <textarea value={text} onChange={e => setText(e.target.value)} className="w-full p-6 rounded-[2rem] bg-white border-none min-h-[140px]" placeholder="紀錄小幸運..." />
-                    <button onClick={add} className="w-full bg-[#14233a] text-white p-5 rounded-[2rem] font-black">投進儲存箱</button>
+                    <textarea value={text} onChange={e => setText(e.target.value)} className="w-full p-6 rounded-[2rem] bg-white border-none min-h-[140px] text-sm font-bold shadow-sm" placeholder="紀錄今日的小幸運..." />
+                    <button onClick={add} className="w-full bg-[#14233a] text-white p-5 rounded-[2rem] font-black shadow-lg transition-all active:scale-95">投進儲存箱</button>
                 </div>
             );
         }
@@ -301,21 +337,27 @@
         function FutureDialogue({ letters, userId }) {
             const [text, setText] = useState('');
             const add = async () => {
+                if (!text) return;
                 await db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('letters').add({ content: text, createdAt: new Date().toISOString() });
                 setText('');
             };
             return (
                 <div className="space-y-6">
-                    <div className="flex gap-2">
-                        <textarea value={text} onChange={e => setText(e.target.value)} className="flex-1 p-4 rounded-[2rem] bg-white border-none" placeholder="給未來的信..." />
-                        <button onClick={add} className="bg-[#cb914a] text-white p-4 rounded-full self-end"><Send/></button>
+                    <div className="flex gap-2 bg-white p-4 rounded-[3rem] border-[0.5px] border-[#c0b8b4] shadow-sm">
+                        <textarea value={text} onChange={e => setText(e.target.value)} className="flex-1 p-2 bg-transparent border-none text-sm font-bold resize-none h-12 no-scrollbar" placeholder="給 2026 年底的我..." />
+                        <button onClick={add} className="bg-[#cb914a] text-white p-4 rounded-full self-end shadow-md transition-all active:scale-90"><Send size={20}/></button>
                     </div>
-                    {letters.map(l => (
-                        <div key={l.id} className="bg-white p-6 rounded-[2rem] shadow-sm border-[0.5px]">
-                            <p className="text-sm">{l.content}</p>
-                            <button onClick={() => db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('letters').doc(l.id).delete()} className="mt-4 text-xs opacity-30">刪除</button>
-                        </div>
-                    ))}
+                    <div className="space-y-6">
+                        {letters.map(l => (
+                            <div key={l.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border-[0.5px] border-[#c0b8b4] relative">
+                                <p className="text-sm font-bold leading-relaxed">{l.content}</p>
+                                <div className="flex justify-between items-center mt-6 pt-4 border-t-[0.5px] border-[#f7f2ed]">
+                                    <span className="text-[10px] opacity-30">{new Date(l.createdAt).toLocaleDateString()}</span>
+                                    <button onClick={() => db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('letters').doc(l.id).delete()} className="text-[10px] text-red-300 hover:text-red-500">刪除</button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             );
         }
