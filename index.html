@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>KANG'S 2026 生命建築師</title>
     
-    <!-- 1. 載入必要的環境資源 (React, Tailwind, Firebase, Lucide Icons) -->
+    <!-- 1. 環境資源載入 -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -16,9 +16,8 @@
     <script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore-compat.js"></script>
     
-    <!-- Lucide Icons (圖標庫) -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://unpkg.com/lucide-react"></script>
+    <!-- Lucide 圖標庫 -->
+    <script src="https://unpkg.com/lucide-react/dist/umd/lucide-react.min.js"></script>
 
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
     
@@ -28,12 +27,22 @@
             -webkit-tap-highlight-color: transparent; 
             background-color: #f7f2ed;
             margin: 0;
+            overflow-x: hidden;
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
+        /* 隱化原生日期選擇器樣式 */
         input[type="date"]::-webkit-inner-spin-button,
         input[type="date"]::-webkit-calendar-picker-indicator {
             display: none;
             -webkit-appearance: none;
+        }
+        /* 漸變進入動畫 */
+        .fade-entry {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
     </style>
 </head>
@@ -41,17 +50,10 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // 從全域變數中取出功能
         const { useState, useEffect, useMemo, useRef } = React;
-        // 在網頁版 CDN 中，lucide-react 的全域變數通常是 LucideReact
-        const { 
-            Calendar, Heart, Star, Send, Trash2, Plus, Edit2,
-            CheckCircle2, Flame, Award, Settings, BookOpen,
-            Coffee, Globe, Activity, MessageSquare, ChevronLeft, ChevronRight, Save, X, Sparkles, Upload, Image: ImageIcon
-        } = LucideReact;
 
-        // --- 1. 這裡填入你的 Firebase 金鑰 ---
-      const firebaseConfig = {
+        // --- 1. Firebase 配置：在此輸入您的金鑰後即可使用 ---
+       const firebaseConfig = {
   apiKey: "AIzaSyDLeH52pL_lGEhj41ejj59nEL5ge4MxsGk",
   authDomain: "kangs-2026.firebaseapp.com",
   projectId: "kangs-2026",
@@ -61,7 +63,7 @@
 };
 
 
-        // 初始化 Firebase (如果尚未初始化)
+        // 初始化 Firebase
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
         }
@@ -69,8 +71,20 @@
         const db = firebase.firestore();
         const appId = "kang2026";
 
+        // 動態獲取 Lucide 圖標
+        const getIcons = () => {
+            if (typeof LucideReact !== 'undefined') return LucideReact;
+            return {};
+        };
+
         // --- 2. 應用程式主邏輯 ---
         function App() {
+            const { 
+                Calendar, Heart, Star, Send, Trash2, Plus, Edit2,
+                CheckCircle2, Flame, Award, Settings, BookOpen,
+                Coffee, Globe, Activity, MessageSquare, ChevronLeft, ChevronRight, Save, X, Sparkles, Upload, Image: ImageIcon
+            } = getIcons();
+
             const [user, setUser] = useState(null);
             const [activeTab, setActiveTab] = useState('daily');
             const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -79,71 +93,213 @@
             const [letters, setLetters] = useState([]);
             const [visions, setVisions] = useState([]);
             const [moodLogs, setMoodLogs] = useState({});
-            const [loading, setLoading] = useState(true);
 
+            // 身份驗證：採用匿名登入機制
             useEffect(() => {
                 const unsubscribe = auth.onAuthStateChanged((u) => {
                     if (u) {
                         setUser(u);
                     } else {
-                        auth.signInAnonymously().catch(err => {
-                            console.error("匿名登入失敗，請檢查 Firebase Console 是否開啟 Anonymous 驗證", err);
-                        });
+                        auth.signInAnonymously().catch(err => console.error("驗證失敗:", err));
                     }
                 });
                 return () => unsubscribe();
             }, []);
 
+            // 資料庫同步 (背景監聽)
             useEffect(() => {
                 if (!user) return;
                 const baseRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid);
                 
+                // 任務監聽
                 const unsubTasks = baseRef.collection('tasks').onSnapshot(snap => {
                     setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                    setLoading(false);
-                }, err => console.error("Firestore Tasks 讀取失敗:", err));
+                });
 
+                // 願景監聽
                 const unsubVisions = baseRef.collection('visions').onSnapshot(snap => {
                     setVisions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                }, err => console.error("Firestore Visions 讀取失敗:", err));
+                });
 
+                // 感恩箱監聽
                 const unsubGratitude = baseRef.collection('gratitude').onSnapshot(snap => {
                     setGratitude(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                }, err => console.error("Firestore Gratitude 讀取失敗:", err));
+                });
 
+                // 留言板監聽
                 const unsubLetters = baseRef.collection('letters').orderBy('createdAt', 'desc').onSnapshot(snap => {
                     setLetters(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                }, err => console.error("Firestore Letters 讀取失敗:", err));
+                });
 
+                // 心情紀錄監聽
                 const unsubMood = baseRef.collection('moods').onSnapshot(snap => {
                     const moods = {};
                     snap.docs.forEach(d => { moods[d.id] = d.data(); });
                     setMoodLogs(moods);
-                }, err => console.error("Firestore Moods 讀取失敗:", err));
+                });
 
                 return () => {
                     unsubTasks(); unsubVisions(); unsubGratitude(); unsubLetters(); unsubMood();
                 };
             }, [user]);
 
+            // 任務勾選邏輯
             const handleTaskToggle = async (task) => {
+                if (!user) return;
                 const dates = task.completedDates || [];
                 const isCompleted = dates.includes(selectedDate);
-                const newDates = isCompleted 
-                    ? dates.filter(d => d !== selectedDate) 
-                    : [...dates, selectedDate];
-                
-                await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('tasks').doc(task.id).update({
-                    completedDates: newDates
-                });
+                const newDates = isCompleted ? dates.filter(d => d !== selectedDate) : [...dates, selectedDate];
+                await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('tasks').doc(task.id).update({ completedDates: newDates });
             };
 
-            if (loading) return (
-                <div className="flex flex-col items-center justify-center h-screen bg-[#f7f2ed] text-[#14233a]">
-                    <div className="animate-bounce font-black tracking-tighter text-lg">正在建構您的實像空間...</div>
-                    <p className="text-xs mt-4 opacity-50">若長時間沒反應，請檢查瀏覽器 Console 報錯</p>
-                </div>
+            // --- 組件定義：導航按鈕 ---
+            const NavBtn = ({ active, onClick, icon: IconComp, label }) => (
+                <button onClick={onClick} className={`flex flex-col items-center gap-1 transition-all duration-300 flex-1 py-3 rounded-[2.5rem] ${active ? 'bg-[#cb914a] text-white scale-105 shadow-md' : 'text-[#86a0bb] hover:text-white'}`}>
+                    {IconComp && <IconComp size={18} />}
+                    <span className="text-[10px] font-black">{label}</span>
+                </button>
             );
+
+            // --- 視圖組件：今日 ---
+            const DailyView = ({ vision }) => {
+                const dayTasks = tasks.filter(t => t.isRecurring || t.createdAt?.startsWith(selectedDate));
+                const currentMood = moodLogs[selectedDate]?.mood || null;
+                const updateMood = (m) => db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('moods').doc(selectedDate).set({ mood: m, updatedAt: new Date().toISOString() });
+
+                return (
+                    <div className="space-y-6 fade-entry">
+                        {vision?.base64 && (
+                            <div className="relative w-full aspect-[16/9] rounded-[2.5rem] overflow-hidden shadow-lg">
+                                <img src={vision.base64} className="w-full h-full object-cover" alt="Vision" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                                <div className="absolute bottom-6 left-8"><p className="text-white text-lg font-black tracking-tight">{vision.title}</p></div>
+                            </div>
+                        )}
+                        <div className="bg-white p-5 rounded-[2.5rem] border-[0.5px] border-[#c0b8b4] flex items-center justify-between shadow-sm">
+                            <button onClick={() => { let d = new Date(selectedDate); d.setDate(d.getDate()-1); setSelectedDate(d.toISOString().split('T')[0]); }}><ChevronLeft/></button>
+                            <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="font-black text-lg border-none bg-transparent text-center focus:ring-0" />
+                            <button onClick={() => { let d = new Date(selectedDate); d.setDate(d.getDate()+1); setSelectedDate(d.toISOString().split('T')[0]); }}><ChevronRight/></button>
+                        </div>
+                        <div className="flex justify-around bg-white p-4 rounded-[2rem] border-[0.5px] border-[#c0b8b4]">
+                            {['🌤️', '☁️', '🌧️', '⚡', '🌙'].map(m => (
+                                <button key={m} onClick={() => updateMood(m)} className={`text-2xl transition-all ${currentMood === m ? 'scale-125' : 'opacity-20 grayscale'}`}>{m}</button>
+                            ))}
+                        </div>
+                        <div className="space-y-4">
+                            {dayTasks.length > 0 ? dayTasks.map(t => (
+                                <div key={t.id} onClick={() => handleTaskToggle(t)} className={`p-5 rounded-[2.5rem] border-[0.5px] transition-all cursor-pointer flex justify-between items-center ${t.completedDates?.includes(selectedDate) ? 'bg-[#5b8e7d] text-white border-transparent' : 'bg-white border-[#c0b8b4]'}`}>
+                                    <div className="font-bold text-sm tracking-tight">{t.title}</div>
+                                    <CheckCircle2 size={20} />
+                                </div>
+                            )) : <div className="text-center py-10 opacity-30 text-xs">今日尚無目標，去目標分頁新增吧</div>}
+                        </div>
+                    </div>
+                );
+            };
+
+            // --- 視圖組件：顯化矩陣 ---
+            const MatrixView = ({ vision }) => {
+                const overallProgress = useMemo(() => {
+                    if (tasks.length === 0) return 0;
+                    const totalTarget = tasks.reduce((acc, t) => acc + (parseInt(t.targetCount) || 100), 0);
+                    const totalDone = tasks.reduce((acc, t) => acc + (t.completedDates?.length || 0), 0);
+                    return Math.min((totalDone / totalTarget) * 100, 100);
+                }, [tasks]);
+
+                return (
+                    <div className="space-y-8 fade-entry">
+                        <section className="bg-[#14233a] p-8 rounded-[3.5rem] text-white space-y-4 shadow-xl text-center">
+                            <p className="text-[10px] text-[#cb914a] font-bold uppercase tracking-widest">2026 年度顯化進度</p>
+                            <h3 className="text-4xl font-black tracking-tighter">{overallProgress.toFixed(1)}%</h3>
+                            <div className="relative w-full aspect-[3/4] rounded-[2.5rem] overflow-hidden bg-white/5 border border-white/10">
+                                {vision?.base64 ? <img src={vision.base64} className="w-full h-full object-cover transition-all duration-1000" style={{ filter: `grayscale(${100 - overallProgress}%)` }} /> : <div className="flex items-center justify-center h-full opacity-20"><ImageIcon size={48} strokeWidth={1}/></div>}
+                            </div>
+                            <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                                <div className="h-full bg-[#cb914a] transition-all duration-1000 shadow-[0_0_10px_rgba(203,145,74,0.5)]" style={{ width: `${overallProgress}%` }} />
+                            </div>
+                        </section>
+                    </div>
+                );
+            };
+
+            // --- 視圖組件：目標中心 ---
+            const TaskManagement = ({ userId }) => {
+                const [title, setTitle] = useState('');
+                const fileRef = useRef();
+                const add = async () => { if(!title) return; await db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('tasks').add({ title, targetCount: 100, completedDates: [], createdAt: new Date().toISOString(), isRecurring: true, category: '目標' }); setTitle(''); };
+                const upload = (e) => {
+                    const file = e.target.files[0];
+                    if(!file) return;
+                    const reader = new FileReader();
+                    reader.onloadend = () => db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('visions').doc('primary').set({ base64: reader.result, title: '我的 2026 生活', updatedAt: new Date().toISOString() });
+                    reader.readAsDataURL(file);
+                };
+
+                return (
+                    <div className="space-y-6 fade-entry">
+                        <section className="bg-white p-8 rounded-[3rem] border-[0.5px] border-[#cb914a] space-y-4">
+                            <h3 className="font-black text-lg">願景設定</h3>
+                            <input type="file" ref={fileRef} onChange={upload} className="hidden" accept="image/*" />
+                            <button onClick={() => fileRef.current.click()} className="w-full bg-[#14233a] text-white p-4 rounded-2xl font-black flex items-center justify-center gap-2 transition-transform active:scale-95"><Upload size={18} /> 本地上傳願景圖</button>
+                        </section>
+                        <section className="bg-white p-8 rounded-[3rem] border-[0.5px] border-[#c0b8b4] space-y-4">
+                            <h3 className="font-black text-lg">新增計畫</h3>
+                            <input value={title} onChange={e => setTitle(e.target.value)} className="w-full p-4 rounded-2xl bg-[#f7f2ed] border-none font-bold text-sm" placeholder="輸入目標名稱" />
+                            <button onClick={add} className="w-full bg-[#cb914a] text-white p-4 rounded-2xl font-black shadow-lg">啟動計畫</button>
+                        </section>
+                        <div className="space-y-4">
+                            {tasks.map(t => (
+                                <div key={t.id} className="bg-white p-5 rounded-[2rem] flex justify-between items-center border-[0.5px] border-[#c0b8b4]">
+                                    <span className="font-bold text-sm">{t.title}</span>
+                                    <button onClick={() => db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('tasks').doc(t.id).delete()} className="text-red-300"><Trash2 size={16} /></button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            };
+
+            // --- 視圖組件：感恩箱 ---
+            const GratitudeBox = ({ userId }) => {
+                const [text, setText] = useState('');
+                const add = async () => { if(!text) return; await db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('gratitude').add({ text, createdAt: new Date().toISOString() }); setText(''); };
+                return (
+                    <div className="space-y-6 fade-entry">
+                        <div className="h-64 bg-[#14233a] rounded-[3rem] flex flex-col items-center justify-center text-white relative shadow-xl overflow-hidden">
+                            <div className="absolute top-6 bg-[#cb914a] px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">2027 解鎖</div>
+                            <div className="text-4xl flex items-center gap-2"><Star fill="#cb914a" className="text-[#cb914a]"/> {gratitude.length}</div>
+                            <p className="text-[10px] mt-4 opacity-40 font-bold uppercase tracking-widest">已蒐集的微光</p>
+                        </div>
+                        <textarea value={text} onChange={e => setText(e.target.value)} className="w-full p-6 rounded-[2rem] bg-white border-none min-h-[140px] text-sm font-bold shadow-inner" placeholder="紀錄今日的小幸運..." />
+                        <button onClick={add} className="w-full bg-[#14233a] text-white p-5 rounded-[2rem] font-black shadow-lg">投進儲存箱</button>
+                    </div>
+                );
+            };
+
+            // --- 視圖組件：時光留言板 ---
+            const FutureDialogue = ({ userId }) => {
+                const [text, setText] = useState('');
+                const add = async () => { if(!text) return; await db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('letters').add({ content: text, createdAt: new Date().toISOString() }); setText(''); };
+                return (
+                    <div className="space-y-6 fade-entry">
+                        <div className="flex gap-2 bg-white p-4 rounded-[3rem] border-[0.5px] border-[#c0b8b4] shadow-sm">
+                            <textarea value={text} onChange={e => setText(e.target.value)} className="flex-1 p-2 bg-transparent border-none text-sm font-bold resize-none h-12 no-scrollbar" placeholder="給 2026 年底的我..." />
+                            <button onClick={add} className="bg-[#cb914a] text-white p-4 rounded-full self-end shadow-md active:scale-90"><Send size={20}/></button>
+                        </div>
+                        <div className="space-y-6">
+                            {letters.map(l => (
+                                <div key={l.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border-[0.5px] border-[#c0b8b4] relative">
+                                    <p className="text-sm font-bold leading-relaxed">{l.content}</p>
+                                    <div className="flex justify-between items-center mt-6 pt-4 border-t-[0.5px] border-[#f7f2ed]">
+                                        <span className="text-[10px] opacity-30 font-bold uppercase">{new Date(l.createdAt).toLocaleDateString()}</span>
+                                        <button onClick={() => db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('letters').doc(l.id).delete()} className="text-[10px] text-red-200 hover:text-red-400">刪除</button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            };
 
             return (
                 <div className="min-h-screen bg-[#f7f2ed] text-[#2d2d2d] font-sans pb-32">
@@ -158,11 +314,11 @@
                     </header>
 
                     <main className="max-w-xl mx-auto p-6">
-                        {activeTab === 'daily' && <DailyView selectedDate={selectedDate} setSelectedDate={setSelectedDate} tasks={tasks} onToggle={handleTaskToggle} moodLogs={moodLogs} vision={visions.find(v => v.id === 'primary')} userId={user.uid} />}
-                        {activeTab === 'matrix' && <MatrixView tasks={tasks} vision={visions.find(v => v.id === 'primary')} />}
-                        {activeTab === 'tasks' && <TaskManagement tasks={tasks} userId={user.uid} vision={visions.find(v => v.id === 'primary')} />}
-                        {activeTab === 'gratitude' && <GratitudeBox gratitude={gratitude} userId={user.uid} />}
-                        {activeTab === 'future' && <FutureDialogue letters={letters} userId={user.uid} />}
+                        {activeTab === 'daily' && <DailyView vision={visions.find(v => v.id === 'primary')} userId={user?.uid} />}
+                        {activeTab === 'matrix' && <MatrixView vision={visions.find(v => v.id === 'primary')} />}
+                        {activeTab === 'tasks' && <TaskManagement userId={user?.uid} />}
+                        {activeTab === 'gratitude' && <GratitudeBox userId={user?.uid} />}
+                        {activeTab === 'future' && <FutureDialogue userId={user?.uid} />}
                     </main>
 
                     <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[92%] max-w-md bg-[#14233a] rounded-[3rem] p-2 shadow-2xl flex justify-between items-center z-[100]">
@@ -176,193 +332,7 @@
             );
         }
 
-        // --- 子組件定義 ---
-
-        function NavBtn({ active, onClick, icon: IconComp, label }) {
-            return (
-                <button onClick={onClick} className={`flex flex-col items-center gap-1 transition-all duration-500 flex-1 py-3 rounded-[2.5rem] ${active ? 'bg-[#cb914a] text-white scale-105 shadow-lg' : 'text-[#86a0bb] hover:text-white'}`}>
-                    <IconComp size={18} />
-                    <span className="text-[10px] font-black">{label}</span>
-                </button>
-            );
-        }
-
-        function DailyView({ selectedDate, setSelectedDate, tasks, onToggle, moodLogs, vision, userId }) {
-            const dayTasks = tasks.filter(t => t.isRecurring || t.createdAt?.startsWith(selectedDate));
-            const currentMood = moodLogs[selectedDate]?.mood || null;
-
-            const changeDate = (offset) => {
-                let d = new Date(selectedDate);
-                d.setDate(d.getDate() + offset);
-                setSelectedDate(d.toISOString().split('T')[0]);
-            };
-
-            const updateMood = async (mood) => {
-                await db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('moods').doc(selectedDate).set({
-                    mood, updatedAt: new Date().toISOString()
-                });
-            };
-
-            return (
-                <div className="space-y-8">
-                    {vision?.base64 && (
-                        <div className="relative w-full aspect-[16/9] rounded-[2.5rem] overflow-hidden shadow-xl">
-                            <img src={vision.base64} className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                            <div className="absolute bottom-6 left-8"><p className="text-white text-lg font-black">{vision.title}</p></div>
-                        </div>
-                    )}
-                    <div className="bg-white p-6 rounded-[2.5rem] border-[0.5px] border-[#c0b8b4] flex items-center justify-between shadow-sm">
-                        <button onClick={() => changeDate(-1)}><ChevronLeft/></button>
-                        <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="font-black text-lg border-none bg-transparent text-center" />
-                        <button onClick={() => changeDate(1)}><ChevronRight/></button>
-                    </div>
-                    <div className="flex justify-around bg-white p-4 rounded-[2rem] border-[0.5px] border-[#c0b8b4]">
-                        {['🌤️', '☁️', '🌧️', '⚡', '🌙'].map(m => (
-                            <button key={m} onClick={() => updateMood(m)} className={`text-2xl transition-all ${currentMood === m ? 'scale-125' : 'opacity-20 grayscale'}`}>{m}</button>
-                        ))}
-                    </div>
-                    <div className="space-y-4">
-                        {dayTasks.length === 0 ? (
-                            <div className="text-center py-10 opacity-30 text-sm">今日尚無目標</div>
-                        ) : (
-                            dayTasks.map(t => (
-                                <div key={t.id} onClick={() => onToggle(t)} className={`p-5 rounded-[2.5rem] border-[0.5px] transition-all cursor-pointer flex justify-between items-center ${t.completedDates?.includes(selectedDate) ? 'bg-[#5b8e7d] text-white border-transparent' : 'bg-white border-[#c0b8b4]'}`}>
-                                    <div className="font-bold">{t.title}</div>
-                                    <CheckCircle2 size={20} />
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
-            );
-        }
-
-        function MatrixView({ tasks, vision }) {
-            const overallProgress = useMemo(() => {
-                if (tasks.length === 0) return 0;
-                const totalTarget = tasks.reduce((acc, t) => acc + (parseInt(t.targetCount) || 100), 0);
-                const totalDone = tasks.reduce((acc, t) => acc + (t.completedDates?.length || 0), 0);
-                return Math.min((totalDone / totalTarget) * 100, 100);
-            }, [tasks]);
-
-            return (
-                <div className="space-y-8">
-                    <section className="bg-[#14233a] p-8 rounded-[3.5rem] text-white space-y-4 shadow-xl text-center">
-                        <p className="text-xs text-[#cb914a] font-bold uppercase tracking-widest">年度顯化進度</p>
-                        <h3 className="text-4xl font-black">{overallProgress.toFixed(1)}%</h3>
-                        <div className="relative w-full aspect-[3/4] rounded-[2.5rem] overflow-hidden bg-white/5 border border-white/10">
-                            {vision?.base64 ? (
-                                <img src={vision.base64} className="w-full h-full object-cover transition-all duration-1000" style={{ filter: `grayscale(${100 - overallProgress}%)` }} />
-                            ) : (
-                                <div className="flex items-center justify-center h-full opacity-20"><ImageIcon size={48}/></div>
-                            )}
-                        </div>
-                        <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
-                            <div className="h-full bg-[#cb914a] transition-all duration-1000" style={{ width: `${overallProgress}%` }} />
-                        </div>
-                    </section>
-                </div>
-            );
-        }
-
-        function TaskManagement({ tasks, userId, vision }) {
-            const [title, setTitle] = useState('');
-            const fileInputRef = useRef(null);
-
-            const add = async () => {
-                if (!title) return;
-                await db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('tasks').add({
-                    title, targetCount: 100, completedDates: [], createdAt: new Date().toISOString(), isRecurring: true, category: '目標'
-                });
-                setTitle('');
-            };
-
-            const handleUpload = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('visions').doc('primary').set({
-                        base64: reader.result, title: '我的 2026 生活', updatedAt: new Date().toISOString()
-                    });
-                };
-                reader.readAsDataURL(file);
-            };
-
-            return (
-                <div className="space-y-6">
-                    <section className="bg-white p-8 rounded-[3rem] border-[0.5px] border-[#cb914a] space-y-4 shadow-sm">
-                        <h3 className="font-black text-lg">願景設定</h3>
-                        <input type="file" ref={fileInputRef} onChange={handleUpload} className="hidden" accept="image/*" />
-                        <button onClick={() => fileInputRef.current.click()} className="w-full bg-[#14233a] text-white p-4 rounded-2xl font-black flex items-center justify-center gap-2 transition-all active:scale-95"><Upload size={18} /> 上傳願景圖</button>
-                    </section>
-                    <section className="bg-white p-8 rounded-[3rem] border-[0.5px] border-[#c0b8b4] space-y-4 shadow-sm">
-                        <h3 className="font-black text-lg">新增目標</h3>
-                        <input value={title} onChange={e => setTitle(e.target.value)} className="w-full p-4 rounded-2xl bg-[#f7f2ed] border-none text-sm font-bold shadow-inner" placeholder="輸入計畫名稱" />
-                        <button onClick={add} className="w-full bg-[#cb914a] text-white p-4 rounded-2xl font-black shadow-lg transition-all active:scale-95">啟動新目標</button>
-                    </section>
-                    <div className="space-y-4">
-                        {tasks.map(t => (
-                            <div key={t.id} className="bg-white p-5 rounded-[2rem] flex justify-between items-center border-[0.5px] border-[#c0b8b4]">
-                                <span className="font-bold text-sm">{t.title}</span>
-                                <button onClick={() => db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('tasks').doc(t.id).delete()} className="text-[#c0b8b4] hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            );
-        }
-
-        function GratitudeBox({ gratitude, userId }) {
-            const [text, setText] = useState('');
-            const add = async () => {
-                if (!text) return;
-                await db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('gratitude').add({ text, createdAt: new Date().toISOString() });
-                setText('');
-            };
-            return (
-                <div className="space-y-6">
-                    <div className="h-64 bg-[#14233a] rounded-[3rem] flex flex-col items-center justify-center text-white relative shadow-xl overflow-hidden">
-                        <div className="absolute top-6 bg-[#cb914a] px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">2027 解鎖</div>
-                        <div className="text-4xl flex items-center gap-2"><Star fill="#cb914a" className="text-[#cb914a]"/> {gratitude.length}</div>
-                        <p className="text-[10px] mt-4 opacity-40">已蒐集的微光</p>
-                    </div>
-                    <textarea value={text} onChange={e => setText(e.target.value)} className="w-full p-6 rounded-[2rem] bg-white border-none min-h-[140px] text-sm font-bold shadow-sm" placeholder="紀錄今日的小幸運..." />
-                    <button onClick={add} className="w-full bg-[#14233a] text-white p-5 rounded-[2rem] font-black shadow-lg transition-all active:scale-95">投進儲存箱</button>
-                </div>
-            );
-        }
-
-        function FutureDialogue({ letters, userId }) {
-            const [text, setText] = useState('');
-            const add = async () => {
-                if (!text) return;
-                await db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('letters').add({ content: text, createdAt: new Date().toISOString() });
-                setText('');
-            };
-            return (
-                <div className="space-y-6">
-                    <div className="flex gap-2 bg-white p-4 rounded-[3rem] border-[0.5px] border-[#c0b8b4] shadow-sm">
-                        <textarea value={text} onChange={e => setText(e.target.value)} className="flex-1 p-2 bg-transparent border-none text-sm font-bold resize-none h-12 no-scrollbar" placeholder="給 2026 年底的我..." />
-                        <button onClick={add} className="bg-[#cb914a] text-white p-4 rounded-full self-end shadow-md transition-all active:scale-90"><Send size={20}/></button>
-                    </div>
-                    <div className="space-y-6">
-                        {letters.map(l => (
-                            <div key={l.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border-[0.5px] border-[#c0b8b4] relative">
-                                <p className="text-sm font-bold leading-relaxed">{l.content}</p>
-                                <div className="flex justify-between items-center mt-6 pt-4 border-t-[0.5px] border-[#f7f2ed]">
-                                    <span className="text-[10px] opacity-30">{new Date(l.createdAt).toLocaleDateString()}</span>
-                                    <button onClick={() => db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('letters').doc(l.id).delete()} className="text-[10px] text-red-300 hover:text-red-500">刪除</button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            );
-        }
-
-        // --- 3. 渲染執行 ---
+        // 渲染啟動
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
