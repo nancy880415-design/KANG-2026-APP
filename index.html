@@ -39,8 +39,10 @@
             from { opacity: 0; transform: translateY(8px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        .bar-transition {
-            transition: height 1s cubic-bezier(0.4, 0, 0.2, 1);
+        .progress-ring-circle {
+            transition: stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
         }
     </style>
 </head>
@@ -140,8 +142,7 @@
                 });
 
                 const unsubVisions = userRef.collection('visions').onSnapshot(snap => {
-                    const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    setVisions(data);
+                    setVisions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
                 });
 
                 const unsubGratitude = userRef.collection('gratitude').orderBy('createdAt', 'desc').onSnapshot(snap => setGratitude(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
@@ -232,33 +233,33 @@
 
             return (
                 <div className="space-y-6 fade-entry">
-                    {/* 願景提醒視窗 - 9:16 比例 */}
-                    <div className="relative w-full aspect-[9/16] max-h-[60vh] rounded-[2.5rem] overflow-hidden shadow-xl border-[0.5px] border-[#c0b8b4] bg-white mx-auto">
+                    {/* 願景提醒視窗 - 9:16 比例調整為更長且無限制感 */}
+                    <div className="relative w-full aspect-[9/16] max-h-[75vh] rounded-[2.5rem] overflow-hidden shadow-2xl border-[0.5px] border-[#c0b8b4] bg-white mx-auto">
                         {vision?.base64 ? (
                             <img src={vision.base64} className="w-full h-full object-cover" />
                         ) : (
                             <div className="w-full h-full flex flex-col items-center justify-center text-[#c0b8b4]">
-                                <Icons.Image size={32} strokeWidth={1} />
-                                <p className="text-[10px] mt-2 font-bold uppercase tracking-widest">尚未設定願景藍圖</p>
+                                <Icons.Image size={40} strokeWidth={1} />
+                                <p className="text-[12px] mt-3 font-black uppercase tracking-widest">點擊目標頁上傳願景</p>
                             </div>
                         )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-60" />
-                        <div className="absolute bottom-8 left-8 text-white">
-                            <p className="text-[10px] font-bold uppercase tracking-widest opacity-70 mb-1">2026 顯化實相中</p>
-                            <p className="text-xl font-black leading-tight tracking-tight">{vision?.title || '我的未來生活'}</p>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80" />
+                        <div className="absolute bottom-10 left-8 right-8 text-white">
+                            <p className="text-[11px] font-black uppercase tracking-[0.3em] opacity-60 mb-2">2026 實相顯化中</p>
+                            <p className="text-2xl font-black leading-tight tracking-tighter drop-shadow-md">{vision?.title || '正在邁向未來...'}</p>
                         </div>
                     </div>
 
                     <div className="bg-white p-5 rounded-[2.5rem] border-[0.5px] border-[#c0b8b4] shadow-sm flex items-center justify-between">
-                        <button onClick={() => { let d = new Date(selectedDate); d.setDate(d.getDate()-1); setSelectedDate(d.toISOString().split('T')[0]); }} className="p-2 hover:bg-[#f7f2ed] rounded-full"><Icons.ChevronLeft size={24}/></button>
+                        <button onClick={() => { let d = new Date(selectedDate); d.setDate(d.getDate()-1); setSelectedDate(d.toISOString().split('T')[0]); }} className="p-2 hover:bg-[#f7f2ed] rounded-full transition-colors"><Icons.ChevronLeft size={24}/></button>
                         <div className="text-center">
                             <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="font-black text-lg text-[#14233a] border-none bg-transparent text-center focus:ring-0" />
-                            <p className="text-[9px] font-black text-[#cb914a] uppercase tracking-widest">生命修煉進度</p>
+                            <p className="text-[9px] font-black text-[#cb914a] uppercase tracking-widest">今日修煉進度</p>
                         </div>
-                        <button onClick={() => { let d = new Date(selectedDate); d.setDate(d.getDate()+1); setSelectedDate(d.toISOString().split('T')[0]); }} className="p-2 hover:bg-[#f7f2ed] rounded-full"><Icons.ChevronRight size={24}/></button>
+                        <button onClick={() => { let d = new Date(selectedDate); d.setDate(d.getDate()+1); setSelectedDate(d.toISOString().split('T')[0]); }} className="p-2 hover:bg-[#f7f2ed] rounded-full transition-colors"><Icons.ChevronRight size={24}/></button>
                     </div>
 
-                    <div className="flex justify-around bg-white p-4 rounded-[2rem] border-[0.5px] border-[#c0b8b4] shadow-sm">
+                    <div className="flex justify-around bg-white p-4 rounded-[2.5rem] border-[0.5px] border-[#c0b8b4] shadow-sm">
                         {['🌤️', '☁️', '🌧️', '⚡', '🌙'].map(m => (
                             <button key={m} onClick={() => updateMood(m)} className={`text-3xl transition-all duration-300 hover:scale-125 ${currentMood === m ? 'scale-125 opacity-100' : 'opacity-20 grayscale'}`}>{m}</button>
                         ))}
@@ -271,7 +272,7 @@
                             const target = parseInt(task.targetCount) || 100;
                             const progress = Math.min((totalDone / target) * 100, 100);
                             return (
-                                <div key={task.id} onClick={() => onToggle(task)} className={`group flex flex-col p-5 rounded-[2.5rem] border-[0.5px] cursor-pointer transition-all duration-500 active:scale-95 ${isDone ? 'bg-[#5b8e7d] border-transparent text-white shadow-lg translate-y-1' : 'bg-white border-[#c0b8b4] hover:shadow-md'}`}>
+                                <div key={task.id} onClick={() => onToggle(task)} className={`group flex flex-col p-6 rounded-[2.5rem] border-[0.5px] cursor-pointer transition-all duration-500 active:scale-95 ${isDone ? 'bg-[#5b8e7d] border-transparent text-white shadow-lg translate-y-1' : 'bg-white border-[#c0b8b4] hover:shadow-md'}`}>
                                     <div className="flex items-center justify-between w-full mb-3">
                                         <div className="flex items-center gap-4">
                                             <CategoryIcon category={task.category} active={isDone} />
@@ -315,42 +316,56 @@
 
             return (
                 <div className="space-y-8 fade-entry pb-10">
-                    <section className="bg-[#14233a] p-8 rounded-[3.5rem] text-white shadow-2xl relative overflow-hidden text-center">
-                        <div className="absolute top-0 right-0 p-8 opacity-10"><Icons.Sparkles size={120} /></div>
-                        <p className="text-[10px] text-[#cb914a] font-black uppercase tracking-widest mb-2">年度總顯化率</p>
-                        <h3 className="text-5xl font-black mb-8 tracking-tighter">{overallProgress.toFixed(1)}%</h3>
+                    <section className="bg-[#14233a] p-10 rounded-[3.5rem] text-white shadow-2xl relative overflow-hidden text-center">
+                        <div className="absolute top-0 right-0 p-8 opacity-10"><Icons.Sparkles size={140} /></div>
+                        <p className="text-[11px] text-[#cb914a] font-black uppercase tracking-[0.4em] mb-3">年度總顯化率</p>
+                        <h3 className="text-6xl font-black mb-10 tracking-tighter">{overallProgress.toFixed(1)}%</h3>
                         
-                        <div className="relative w-full aspect-[9/16] max-h-[50vh] rounded-[2.5rem] overflow-hidden bg-white/5 border border-white/10 mb-8 mx-auto">
+                        <div className="relative w-full aspect-[9/16] max-h-[65vh] rounded-[2.5rem] overflow-hidden bg-white/5 border border-white/10 mb-10 mx-auto shadow-inner">
                            {vision?.base64 ? (
-                               <img src={vision.base64} className="w-full h-full object-cover transition-all duration-1000" style={{ filter: `grayscale(${100 - overallProgress}%)` }} />
+                               <img src={vision.base64} className="w-full h-full object-cover transition-all duration-1000" style={{ filter: `grayscale(${100 - overallProgress}%) brightness(${0.7 + (overallProgress/100) * 0.3})` }} />
                            ) : (
-                               <div className="flex items-center justify-center h-full opacity-20"><Icons.Image size={48} /></div>
+                               <div className="flex items-center justify-center h-full opacity-10"><Icons.Image size={64} /></div>
                            )}
+                           <div className="absolute inset-0 bg-gradient-to-t from-[#14233a]/60 to-transparent" />
                         </div>
                         
-                        <div className="w-full h-2.5 bg-white/10 rounded-full overflow-hidden shadow-inner">
-                           <div className="h-full bg-gradient-to-r from-[#86a0bb] via-[#cb914a] to-[#cb914a] transition-all duration-1000 shadow-[0_0_15px_rgba(203,145,74,0.4)]" style={{ width: `${overallProgress}%` }} />
+                        <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden shadow-inner p-0.5">
+                           <div className="h-full bg-gradient-to-r from-[#86a0bb] via-[#cb914a] to-[#cb914a] rounded-full transition-all duration-1000 shadow-[0_0_20px_rgba(203,145,74,0.5)]" style={{ width: `${overallProgress}%` }} />
                         </div>
                     </section>
 
-                    <div className="bg-white p-8 rounded-[3rem] border-[0.5px] border-[#c0b8b4] shadow-sm">
-                        <h4 className="text-[11px] font-black text-[#14233a] uppercase mb-10 tracking-widest text-center">生命領域顯化度</h4>
-                        <div className="flex justify-between items-end h-48 px-2 gap-2">
+                    {/* 重製生命領域進度視覺 - 卡片能量環設計 */}
+                    <div className="space-y-4">
+                        <h4 className="text-[12px] font-black text-[#14233a] uppercase px-4 tracking-[0.3em] text-center mb-6">生命領域調頻狀態</h4>
+                        <div className="grid grid-cols-1 gap-4">
                             {categoryData.map(cd => (
-                                <div key={cd.name} className="flex flex-col items-center gap-4 flex-1">
-                                    <div className="relative w-full h-full bg-[#f7f2ed] rounded-full overflow-hidden flex flex-col justify-end">
-                                        <div 
-                                            className="bar-transition rounded-full w-full" 
-                                            style={{ 
-                                                height: `${cd.percent}%`, 
-                                                backgroundColor: colors[cd.name],
-                                                boxShadow: `0 0 10px ${colors[cd.name]}40`
-                                            }} 
-                                        />
+                                <div key={cd.name} className="bg-white p-6 rounded-[3rem] border-[0.5px] border-[#c0b8b4] shadow-sm flex items-center justify-between group transition-all hover:shadow-md">
+                                    <div className="flex items-center gap-5">
+                                        <div className="relative w-14 h-14 flex items-center justify-center">
+                                            <svg className="w-14 h-14">
+                                                <circle cx="28" cy="28" r="24" fill="none" stroke="#f7f2ed" strokeWidth="4" />
+                                                <circle 
+                                                    cx="28" cy="28" r="24" fill="none" 
+                                                    stroke={colors[cd.name]} 
+                                                    strokeWidth="4" 
+                                                    strokeDasharray="150.8" 
+                                                    strokeDashoffset={150.8 - (150.8 * cd.percent) / 100}
+                                                    strokeLinecap="round"
+                                                    className="progress-ring-circle"
+                                                />
+                                            </svg>
+                                            <div className="absolute inset-0 flex items-center justify-center">
+                                                <CategoryIcon category={cd.name} size={16} />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p className="text-[13px] font-black text-[#14233a] tracking-tight">{cd.name}</p>
+                                            <p className="text-[9px] font-bold text-[#86a0bb] uppercase tracking-widest mt-0.5">能量顯化中</p>
+                                        </div>
                                     </div>
-                                    <div className="text-center space-y-0.5">
-                                        <p className="text-[8px] font-black text-[#cb914a] leading-none">{cd.percent.toFixed(0)}%</p>
-                                        <p className="text-[8px] font-bold text-[#14233a] whitespace-nowrap overflow-hidden text-ellipsis" style={{ writingMode: 'vertical-rl' }}>{cd.name}</p>
+                                    <div className="text-right">
+                                        <p className="text-2xl font-black tracking-tighter" style={{ color: colors[cd.name] }}>{cd.percent.toFixed(0)}<span className="text-[10px] ml-0.5 opacity-50">%</span></p>
                                     </div>
                                 </div>
                             ))}
@@ -385,9 +400,9 @@
                 reader.onload = (event) => {
                     const img = new Image();
                     img.onload = () => {
-                        // 使用 Canvas 壓縮圖片，確保不超過 1MB 限制
                         const canvas = document.createElement('canvas');
-                        const MAX_WIDTH = 720;
+                        // 針對 9:16 比例進行縮放處理
+                        const MAX_WIDTH = 720; 
                         const scale = MAX_WIDTH / img.width;
                         canvas.width = MAX_WIDTH;
                         canvas.height = img.height * scale;
@@ -395,7 +410,8 @@
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                         
-                        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+                        // 壓縮為優質 JPEG，確保儲存成功
+                        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
                         saveVision({ 
                             base64: compressedBase64, 
                             title: vision?.title || '我的 2026 生活' 
@@ -409,10 +425,14 @@
             return (
                 <div className="space-y-8 fade-entry pb-10">
                     <section className="bg-white p-8 rounded-[3rem] border-[0.5px] border-[#cb914a] space-y-6 shadow-sm">
-                        <h3 className="font-black text-lg flex items-center gap-3 text-[#14233a]"><Icons.Image className="text-[#cb914a]"/>實相願景設定</h3>
-                        <input value={vision?.title || ''} onChange={e => saveVision({...vision, title: e.target.value})} className="w-full p-4 rounded-2xl bg-[#f7f2ed] border-none font-bold text-sm shadow-inner" placeholder="願景名稱 (如: 移居理想之地)" />
-                        <button onClick={() => fileInputRef.current.click()} className="w-full bg-[#14233a] text-white p-4 rounded-[1.5rem] font-black flex items-center justify-center gap-2 active:scale-95 transition-all shadow-md"><Icons.Upload size={18}/> 上傳藍圖 (9:16 直式圖片)</button>
-                        <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+                        <h3 className="font-black text-lg flex items-center gap-3 text-[#14233a]"><Icons.Image size={20} className="text-[#cb914a]"/>願景藍圖設定</h3>
+                        <div className="space-y-4">
+                            <input value={vision?.title || ''} onChange={e => saveVision({...vision, title: e.target.value})} className="w-full p-4 rounded-2xl bg-[#f7f2ed] border-none text-sm font-bold shadow-inner" placeholder="願景名稱 (如: 移居理想之地)" />
+                            <button onClick={() => fileInputRef.current.click()} className="w-full bg-[#14233a] text-white p-4 rounded-[1.5rem] font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all shadow-md">
+                                <Icons.Upload size={18}/> 上傳藍圖 (建議 9:16)
+                            </button>
+                            <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+                        </div>
                     </section>
                     
                     <section className="bg-white p-8 rounded-[3rem] border-[0.5px] border-[#c0b8b4] space-y-4 shadow-sm">
@@ -448,7 +468,7 @@
                         <button onClick={add} className="w-full bg-[#cb914a] text-white p-4 rounded-2xl font-black shadow-lg active:scale-95 transition-all">啟動計畫</button>
                     </section>
 
-                    <div className="space-y-4 px-1">
+                    <div className="space-y-4">
                         {tasks.map(t => (
                             <div key={t.id} className="bg-white p-5 rounded-[2.5rem] border-[0.5px] border-[#c0b8b4] flex justify-between items-center shadow-sm">
                                 <div className="flex items-center gap-4">
@@ -471,11 +491,11 @@
             return (
                 <div className="space-y-8 fade-entry pb-10 text-center">
                     <div className="relative h-72 bg-[#14233a] rounded-[4rem] border-8 border-white shadow-xl flex flex-col items-center justify-center overflow-hidden">
-                        <div className="absolute top-6 px-4 py-1 bg-[#cb914a] rounded-full text-[9px] font-black text-white uppercase tracking-widest shadow-lg">感恩儲存箱</div>
+                        <div className="absolute top-6 px-4 py-1 bg-[#cb914a] rounded-full text-[9px] font-black text-white uppercase tracking-widest shadow-lg">感恩微光中心</div>
                         <div className="flex flex-wrap gap-2 p-10 justify-center">
                             {gratitude.slice(0, 50).map((_, i) => <Icons.Star key={i} size={14} className="text-[#cb914a]" fill="#cb914a" />)}
                         </div>
-                        <p className="text-[10px] text-white/40 font-black tracking-widest mb-4">已收集 {gratitude.length} 顆星星</p>
+                        <p className="text-[10px] text-white/40 font-black tracking-widest mb-4 uppercase">已收集 {gratitude.length} 顆微光</p>
                     </div>
                     
                     <div className="bg-white p-6 rounded-[3rem] border-[0.5px] border-[#c0b8b4] shadow-sm space-y-4">
@@ -484,10 +504,10 @@
                     </div>
 
                     <div className="space-y-4 text-left px-2">
-                        <h3 className="font-black text-lg text-[#14233a] mt-8 mb-4 px-2">累積的微光</h3>
+                        <h3 className="font-black text-lg text-[#14233a] mt-8 mb-4 px-2 tracking-widest uppercase">能量回溯</h3>
                         {gratitude.map(g => (
-                            <div key={g.id} className="bg-white p-6 rounded-[2.5rem] border-[0.5px] border-[#c0b8b4] shadow-sm">
-                                <p className="text-sm font-bold leading-relaxed">{g.text}</p>
+                            <div key={g.id} className="bg-white p-6 rounded-[2.5rem] border-[0.5px] border-[#c0b8b4] shadow-sm mb-4">
+                                <p className="text-sm font-bold leading-relaxed text-[#14233a]">{g.text}</p>
                                 <div className="flex justify-between items-center mt-4 pt-3 border-t-[0.5px] border-[#f7f2ed]">
                                     <span className="text-[9px] text-[#86a0bb] font-black uppercase">{new Date(g.createdAt).toLocaleDateString()}</span>
                                     <button onClick={() => db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('gratitude').doc(g.id).delete()} className="text-red-200"><Icons.Trash size={14}/></button>
@@ -536,11 +556,11 @@
             );
         }
 
-        function CategoryIcon({ category, active }) {
+        function CategoryIcon({ category, size = 18, active }) {
             const icons = { '副業事業': Icons.Coffee, '語言學習': Icons.Globe, '健康體魄': Icons.Activity, '心靈成長': Icons.Heart, '休閒樂趣': Icons.Star };
             const Comp = icons[category] || Icons.BookOpen;
             const colorMap = { '副業事業': '#cb914a', '語言學習': '#86a0bb', '健康體魄': '#5b8e7d', '心靈成長': '#14233a', '休閒樂趣': '#c0b8b4' };
-            return <div className={`p-3 rounded-2xl ${active ? 'bg-white/30' : 'bg-[#f7f2ed]'} transition-all`}><Comp size={18} style={{ color: active ? 'white' : colorMap[category] }} strokeWidth={3}/></div>;
+            return <div className={`p-3 rounded-2xl ${active ? 'bg-white/30' : 'bg-[#f7f2ed]'} transition-all`}><Comp size={size} style={{ color: active ? 'white' : colorMap[category] }} strokeWidth={3}/></div>;
         }
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
