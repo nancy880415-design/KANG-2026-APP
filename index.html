@@ -50,7 +50,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- 1. Firebase 配置 (已填入金鑰) ---
+        // --- 1. Firebase 配置 ---
         const firebaseConfig = {
             apiKey: "AIzaSyDLeH52pL_lGEhj41ejj59nEL5ge4MxsGk",
             authDomain: "kangs-2026.firebaseapp.com",
@@ -60,7 +60,6 @@
             appId: "1:1002873615830:web:54825d42280a09c367e077"
         };
 
-        // 初始化
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
         }
@@ -140,7 +139,11 @@
                     setLoading(false);
                 });
 
-                const unsubVisions = userRef.collection('visions').onSnapshot(snap => setVisions(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+                const unsubVisions = userRef.collection('visions').onSnapshot(snap => {
+                    const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    setVisions(data);
+                });
+
                 const unsubGratitude = userRef.collection('gratitude').orderBy('createdAt', 'desc').onSnapshot(snap => setGratitude(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
                 const unsubLetters = userRef.collection('letters').orderBy('createdAt', 'desc').onSnapshot(snap => setLetters(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
                 const unsubMood = userRef.collection('moods').onSnapshot(snap => {
@@ -177,6 +180,8 @@
                 await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('gratitude').add({ text, date: selectedDate, createdAt: new Date().toISOString() });
             };
 
+            const activeVision = useMemo(() => visions.find(v => v.id === 'primary') || visions[0], [visions]);
+
             const NavBtn = ({ id, icon: IconComp, label }) => (
                 <button onClick={() => setActiveTab(id)} className={`flex flex-col items-center gap-1 transition-all duration-300 flex-1 py-3 rounded-[2.5rem] ${activeTab === id ? 'bg-[#cb914a] text-white scale-105 shadow-lg' : 'text-[#86a0bb] hover:text-white'}`}>
                     <IconComp size={18} />
@@ -201,9 +206,9 @@
                     </header>
 
                     <main className="max-w-xl mx-auto p-6">
-                        {activeTab === 'daily' && <DailyView selectedDate={selectedDate} setSelectedDate={setSelectedDate} tasks={tasks} onToggle={handleTaskToggle} moodLogs={moodLogs} vision={visions.find(v => v.id === 'primary')} db={db} appId={appId} user={user} />}
-                        {activeTab === 'matrix' && <ProgressView tasks={tasks} vision={visions.find(v => v.id === 'primary')} categories={categories} colors={categoryColors} />}
-                        {activeTab === 'tasks' && <TaskManagement tasks={tasks} saveVision={saveVision} vision={visions.find(v => v.id === 'primary')} db={db} appId={appId} user={user} categories={categories} />}
+                        {activeTab === 'daily' && <DailyView selectedDate={selectedDate} setSelectedDate={setSelectedDate} tasks={tasks} onToggle={handleTaskToggle} moodLogs={moodLogs} updateMood={(m) => db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('moods').doc(selectedDate).set({ mood: m, updatedAt: new Date().toISOString() })} vision={activeVision} />}
+                        {activeTab === 'matrix' && <ProgressView tasks={tasks} vision={activeVision} categories={categories} colors={categoryColors} />}
+                        {activeTab === 'tasks' && <TaskManagement tasks={tasks} saveVision={saveVision} vision={activeVision} db={db} appId={appId} user={user} categories={categories} />}
                         {activeTab === 'gratitude' && <GratitudeBox gratitude={gratitude} addGratitude={addGratitude} db={db} appId={appId} user={user} />}
                         {activeTab === 'future' && <FutureDialogue letters={letters} db={db} appId={appId} user={user} />}
                     </main>
@@ -221,48 +226,50 @@
 
         // --- 子組件 ---
 
-        function DailyView({ selectedDate, setSelectedDate, tasks, onToggle, moodLogs, vision, db, appId, user }) {
+        function DailyView({ selectedDate, setSelectedDate, tasks, onToggle, moodLogs, updateMood, vision }) {
             const dayTasks = tasks.filter(t => t.frequency === '每日' || t.createdAt?.startsWith(selectedDate));
             const currentMood = moodLogs[selectedDate]?.mood || null;
 
             return (
                 <div className="space-y-6 fade-entry">
-                    {/* 願景圖 (比例 9:16) */}
-                    <div className="relative w-full aspect-[9/16] max-h-[60vh] rounded-[2.5rem] overflow-hidden shadow-xl border-[0.5px] border-[#c0b8b4] bg-white">
+                    {/* 願景提醒視窗 - 9:16 比例 */}
+                    <div className="relative w-full aspect-[9/16] max-h-[60vh] rounded-[2.5rem] overflow-hidden shadow-xl border-[0.5px] border-[#c0b8b4] bg-white mx-auto">
                         {vision?.base64 ? (
                             <img src={vision.base64} className="w-full h-full object-cover" />
                         ) : (
                             <div className="w-full h-full flex flex-col items-center justify-center text-[#c0b8b4]">
                                 <Icons.Image size={32} strokeWidth={1} />
-                                <p className="text-[10px] mt-2 font-bold uppercase tracking-widest">請設定願景藍圖</p>
+                                <p className="text-[10px] mt-2 font-bold uppercase tracking-widest">尚未設定願景藍圖</p>
                             </div>
                         )}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-60" />
                         <div className="absolute bottom-8 left-8 text-white">
-                            <p className="text-[10px] font-bold uppercase tracking-widest opacity-70 mb-1">正在顯化實相</p>
+                            <p className="text-[10px] font-bold uppercase tracking-widest opacity-70 mb-1">2026 顯化實相中</p>
                             <p className="text-xl font-black leading-tight tracking-tight">{vision?.title || '我的未來生活'}</p>
                         </div>
                     </div>
 
                     <div className="bg-white p-5 rounded-[2.5rem] border-[0.5px] border-[#c0b8b4] shadow-sm flex items-center justify-between">
-                        <button onClick={() => { let d = new Date(selectedDate); d.setDate(d.getDate()-1); setSelectedDate(d.toISOString().split('T')[0]); }} className="p-2 transition-colors hover:bg-[#f7f2ed] rounded-full"><Icons.ChevronLeft size={24}/></button>
+                        <button onClick={() => { let d = new Date(selectedDate); d.setDate(d.getDate()-1); setSelectedDate(d.toISOString().split('T')[0]); }} className="p-2 hover:bg-[#f7f2ed] rounded-full"><Icons.ChevronLeft size={24}/></button>
                         <div className="text-center">
                             <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="font-black text-lg text-[#14233a] border-none bg-transparent text-center focus:ring-0" />
                             <p className="text-[9px] font-black text-[#cb914a] uppercase tracking-widest">生命修煉進度</p>
                         </div>
-                        <button onClick={() => { let d = new Date(selectedDate); d.setDate(d.getDate()+1); setSelectedDate(d.toISOString().split('T')[0]); }} className="p-2 transition-colors hover:bg-[#f7f2ed] rounded-full"><Icons.ChevronRight size={24}/></button>
+                        <button onClick={() => { let d = new Date(selectedDate); d.setDate(d.getDate()+1); setSelectedDate(d.toISOString().split('T')[0]); }} className="p-2 hover:bg-[#f7f2ed] rounded-full"><Icons.ChevronRight size={24}/></button>
                     </div>
 
                     <div className="flex justify-around bg-white p-4 rounded-[2rem] border-[0.5px] border-[#c0b8b4] shadow-sm">
                         {['🌤️', '☁️', '🌧️', '⚡', '🌙'].map(m => (
-                            <button key={m} onClick={() => db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('moods').doc(selectedDate).set({ mood: m, updatedAt: new Date().toISOString() })} className={`text-2xl transition-all duration-300 hover:scale-125 ${currentMood === m ? 'scale-125 opacity-100' : 'opacity-20 grayscale'}`}>{m}</button>
+                            <button key={m} onClick={() => updateMood(m)} className={`text-3xl transition-all duration-300 hover:scale-125 ${currentMood === m ? 'scale-125 opacity-100' : 'opacity-20 grayscale'}`}>{m}</button>
                         ))}
                     </div>
 
                     <div className="space-y-4">
                         {dayTasks.map(task => {
                             const isDone = task.completedDates?.includes(selectedDate);
-                            const progress = Math.min(((task.completedDates?.length || 0) / (parseInt(task.targetCount) || 100)) * 100, 100);
+                            const totalDone = task.completedDates?.length || 0;
+                            const target = parseInt(task.targetCount) || 100;
+                            const progress = Math.min((totalDone / target) * 100, 100);
                             return (
                                 <div key={task.id} onClick={() => onToggle(task)} className={`group flex flex-col p-5 rounded-[2.5rem] border-[0.5px] cursor-pointer transition-all duration-500 active:scale-95 ${isDone ? 'bg-[#5b8e7d] border-transparent text-white shadow-lg translate-y-1' : 'bg-white border-[#c0b8b4] hover:shadow-md'}`}>
                                     <div className="flex items-center justify-between w-full mb-3">
@@ -313,8 +320,7 @@
                         <p className="text-[10px] text-[#cb914a] font-black uppercase tracking-widest mb-2">年度總顯化率</p>
                         <h3 className="text-5xl font-black mb-8 tracking-tighter">{overallProgress.toFixed(1)}%</h3>
                         
-                        {/* 進度頁面同樣採用 9:16 */}
-                        <div className="relative w-full aspect-[9/16] max-h-[50vh] rounded-[2.5rem] overflow-hidden bg-white/5 border border-white/10 mb-8">
+                        <div className="relative w-full aspect-[9/16] max-h-[50vh] rounded-[2.5rem] overflow-hidden bg-white/5 border border-white/10 mb-8 mx-auto">
                            {vision?.base64 ? (
                                <img src={vision.base64} className="w-full h-full object-cover transition-all duration-1000" style={{ filter: `grayscale(${100 - overallProgress}%)` }} />
                            ) : (
@@ -373,19 +379,31 @@
 
             const handleImageUpload = (e) => {
                 const file = e.target.files[0];
-                if (file) {
-                    if (file.size > 800000) {
-                        console.warn("圖片檔案較大，請注意 Firestore 1MB 限制");
-                    }
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        // 使用 Canvas 壓縮圖片，確保不超過 1MB 限制
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 720;
+                        const scale = MAX_WIDTH / img.width;
+                        canvas.width = MAX_WIDTH;
+                        canvas.height = img.height * scale;
+                        
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        
+                        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
                         saveVision({ 
-                            base64: reader.result, 
+                            base64: compressedBase64, 
                             title: vision?.title || '我的 2026 生活' 
                         });
                     };
-                    reader.readAsDataURL(file);
-                }
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
             };
 
             return (
@@ -508,7 +526,7 @@
                                     <span className="text-[10px] opacity-30 font-bold uppercase">{new Date(l.createdAt).toLocaleDateString()}</span>
                                     <div className="flex gap-4">
                                         <button onClick={() => { setText(l.content); setEditingId(l.id); window.scrollTo({top: 0, behavior: 'smooth'}); }} className="text-[#cb914a]"><Icons.Edit size={14}/></button>
-                                        <button onClick={() => db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('letters').doc(l.id).delete()} className="text-red-200"><Icons.Trash size size={14}/></button>
+                                        <button onClick={() => db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('letters').doc(l.id).delete()} className="text-red-200"><Icons.Trash size={14}/></button>
                                     </div>
                                 </div>
                             </div>
