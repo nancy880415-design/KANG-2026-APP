@@ -44,6 +44,12 @@
             transform: rotate(-90deg);
             transform-origin: 50% 50%;
         }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 0.5px solid rgba(203, 145, 74, 0.2);
+        }
     </style>
 </head>
 <body>
@@ -52,7 +58,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- 1. Firebase 配置 ---
+        // --- 1. Firebase 配置 (已填入您的金鑰) ---
         const firebaseConfig = {
             apiKey: "AIzaSyDLeH52pL_lGEhj41ejj59nEL5ge4MxsGk",
             authDomain: "kangs-2026.firebaseapp.com",
@@ -90,7 +96,8 @@
             BookOpen: (p) => <svg width={p.size || 24} height={p.size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>,
             Edit: (p) => <svg width={p.size || 24} height={p.size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
             Save: (p) => <svg width={p.size || 24} height={p.size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,
-            Send: (p) => <svg width={p.size || 24} height={p.size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            Send: (p) => <svg width={p.size || 24} height={p.size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>,
+            Logout: (p) => <svg width={p.size || 24} height={p.size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
         };
 
         // --- 3. 核心邏輯 ---
@@ -104,6 +111,12 @@
             const [visions, setVisions] = useState([]);
             const [moodLogs, setMoodLogs] = useState({});
             const [loading, setLoading] = useState(true);
+            
+            // 登入介面狀態
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [isRegister, setIsRegister] = useState(false);
+            const [authError, setAuthError] = useState('');
 
             const categories = ['副業事業', '語言學習', '健康體魄', '心靈成長', '休閒樂趣'];
             const categoryColors = {
@@ -114,22 +127,26 @@
                 '休閒樂趣': '#c0b8b4'
             };
 
+            // 身份驗證監聽
             useEffect(() => {
                 const unsubscribe = auth.onAuthStateChanged((u) => {
-                    if (u) { setUser(u); } 
-                    else { auth.signInAnonymously().catch(e => console.error("驗證錯誤:", e)); }
+                    setUser(u);
+                    setLoading(false);
                 });
                 return () => unsubscribe();
             }, []);
 
+            // 資料同步
             useEffect(() => {
-                if (!user) return;
+                if (!user) {
+                    setTasks([]); setGratitude([]); setLetters([]); setVisions([]);
+                    return;
+                }
                 const userRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid);
                 
                 const unsubTasks = userRef.collection('tasks').onSnapshot(snap => {
                     const taskList = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     setTasks(taskList);
-                    
                     if (taskList.length === 0 && !snap.metadata.fromCache) {
                         const defaults = [
                             { title: "副業進度開發", category: "副業事業", frequency: "每日", type: "大項目", targetCount: 100, createdAt: new Date().toISOString(), completedDates: [] },
@@ -138,23 +155,31 @@
                         ];
                         defaults.forEach(d => userRef.collection('tasks').add(d));
                     }
-                    setLoading(false);
                 });
 
-                const unsubVisions = userRef.collection('visions').onSnapshot(snap => {
-                    setVisions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                });
-
+                const unsubVisions = userRef.collection('visions').onSnapshot(snap => setVisions(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
                 const unsubGratitude = userRef.collection('gratitude').orderBy('createdAt', 'desc').onSnapshot(snap => setGratitude(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
                 const unsubLetters = userRef.collection('letters').orderBy('createdAt', 'desc').onSnapshot(snap => setLetters(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
                 const unsubMood = userRef.collection('moods').onSnapshot(snap => {
-                    const moods = {};
-                    snap.docs.forEach(d => moods[d.id] = d.data());
-                    setMoodLogs(moods);
+                    const moods = {}; snap.docs.forEach(d => moods[d.id] = d.data()); setMoodLogs(moods);
                 });
 
                 return () => { unsubTasks(); unsubVisions(); unsubGratitude(); unsubLetters(); unsubMood(); };
             }, [user]);
+
+            const handleAuth = async (e) => {
+                e.preventDefault();
+                setAuthError('');
+                try {
+                    if (isRegister) {
+                        await auth.createUserWithEmailAndPassword(email, password);
+                    } else {
+                        await auth.signInWithEmailAndPassword(email, password);
+                    }
+                } catch (err) {
+                    setAuthError(err.message);
+                }
+            };
 
             const handleTaskToggle = async (task) => {
                 if (!user) return;
@@ -166,14 +191,7 @@
 
             const saveVision = async (data) => {
                 if (!user) return;
-                try {
-                    await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('visions').doc('primary').set({ 
-                        ...data, 
-                        updatedAt: new Date().toISOString() 
-                    });
-                } catch (e) {
-                    console.error("願景存檔失敗:", e);
-                }
+                await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('visions').doc('primary').set({ ...data, updatedAt: new Date().toISOString() });
             };
 
             const addGratitude = async (text) => {
@@ -183,27 +201,47 @@
 
             const activeVision = useMemo(() => visions.find(v => v.id === 'primary') || visions[0], [visions]);
 
-            const NavBtn = ({ id, icon: IconComp, label }) => (
-                <button onClick={() => setActiveTab(id)} className={`flex flex-col items-center gap-1 transition-all duration-300 flex-1 py-3 rounded-[2.5rem] ${activeTab === id ? 'bg-[#cb914a] text-white scale-105 shadow-lg' : 'text-[#86a0bb] hover:text-white'}`}>
-                    <IconComp size={18} />
-                    <span className="text-[10px] font-black">{label}</span>
-                </button>
-            );
+            if (loading) return <div className="h-screen flex items-center justify-center bg-[#f7f2ed] font-black text-[#cb914a] animate-pulse">正在同步 2026 頻率...</div>;
 
-            if (loading && !user) return (
-                <div className="flex items-center justify-center h-screen bg-[#f7f2ed]">
-                    <div className="animate-pulse font-black text-[#cb914a]">正在同步 2026 頻率...</div>
+            // 登入介面
+            if (!user) return (
+                <div className="min-h-screen flex items-center justify-center bg-[#f7f2ed] px-6 py-12">
+                    <div className="w-full max-w-sm glass-card p-10 rounded-[3.5rem] shadow-2xl space-y-8 fade-entry">
+                        <div className="text-center space-y-2">
+                            <h1 className="text-3xl font-black text-[#14233a] tracking-tighter">生命建築師</h1>
+                            <p className="text-[10px] text-[#cb914a] font-bold uppercase tracking-[0.4em]">2026 實相顯化系統</p>
+                        </div>
+                        <form onSubmit={handleAuth} className="space-y-4">
+                            <input type="email" placeholder="您的電子信箱" value={email} onChange={e => setEmail(e.target.value)} required className="w-full p-4 bg-[#f7f2ed] border-none rounded-2xl text-sm font-bold shadow-inner" />
+                            <input type="password" placeholder="登入密碼" value={password} onChange={e => setPassword(e.target.value)} required className="w-full p-4 bg-[#f7f2ed] border-none rounded-2xl text-sm font-bold shadow-inner" />
+                            {authError && <p className="text-red-400 text-[10px] font-bold px-2">{authError}</p>}
+                            <button type="submit" className="w-full py-4 bg-[#14233a] text-white rounded-2xl font-black shadow-lg active:scale-95 transition-all">
+                                {isRegister ? '建立顯化帳號' : '進入 2026 實相'}
+                            </button>
+                        </form>
+                        <div className="text-center">
+                            <button onClick={() => setIsRegister(!isRegister)} className="text-[11px] font-black text-[#86a0bb] uppercase tracking-widest border-b border-[#86a0bb]/30 pb-1">
+                                {isRegister ? '已有帳號？前往登入' : '尚未註冊？開啟新頻率'}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             );
 
+            // 主程式內容
             return (
                 <div className="min-h-screen bg-[#f7f2ed] text-[#2d2d2d] font-sans pb-32">
                     <header className="sticky top-0 z-50 bg-[#f7f2ed]/70 backdrop-blur-xl border-b-[0.5px] border-[#c0b8b4] p-6 flex justify-between items-center">
                         <div>
                             <h1 className="text-2xl font-black text-[#14233a] tracking-tight">KANG'S 2026</h1>
-                            <p className="text-[10px] text-[#cb914a] font-bold tracking-[0.2em] uppercase">生命建築師系統</p>
+                            <p className="text-[10px] text-[#cb914a] font-bold tracking-[0.2em] uppercase">顯化紀錄系統</p>
                         </div>
-                        <Icons.Heart size={24} fill="#14233a" />
+                        <div className="flex items-center gap-4">
+                            <button onClick={() => auth.signOut()} className="text-[#86a0bb] hover:text-[#14233a] transition-colors"><Icons.Logout size={20} /></button>
+                            <div className="w-10 h-10 rounded-full bg-[#14233a] flex items-center justify-center text-white shadow-inner">
+                                <Icons.Heart size={20} fill="currentColor" />
+                            </div>
+                        </div>
                     </header>
 
                     <main className="max-w-xl mx-auto p-6">
@@ -215,17 +253,25 @@
                     </main>
 
                     <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[92%] max-w-md bg-[#14233a] rounded-[3rem] p-2 shadow-2xl flex justify-between items-center z-[100]">
-                        <NavBtn id="daily" icon={Icons.Calendar} label="今日" />
-                        <NavBtn id="matrix" icon={Icons.Award} label="進度" />
-                        <NavBtn id="tasks" icon={Icons.Settings} label="目標" />
-                        <NavBtn id="gratitude" icon={Icons.Star} label="感恩" />
-                        <NavBtn id="future" icon={Icons.Message} label="留言" />
+                        <NavBtn id="daily" active={activeTab === 'daily'} onClick={() => setActiveTab('daily')} icon={Icons.Calendar} label="今日" />
+                        <NavBtn id="matrix" active={activeTab === 'matrix'} onClick={() => setActiveTab('matrix')} icon={Icons.Award} label="進度" />
+                        <NavBtn id="tasks" active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} icon={Icons.Settings} label="目標" />
+                        <NavBtn id="gratitude" active={activeTab === 'gratitude'} onClick={() => setActiveTab('gratitude')} icon={Icons.Star} label="感恩" />
+                        <NavBtn id="future" active={activeTab === 'future'} onClick={() => setActiveTab('future')} icon={Icons.Message} label="留言" />
                     </nav>
                 </div>
             );
         }
 
         // --- 子組件 ---
+        function NavBtn({ id, active, onClick, icon: IconComp, label }) {
+            return (
+                <button onClick={onClick} className={`flex flex-col items-center gap-1 transition-all duration-300 flex-1 py-3 rounded-[2.5rem] ${active ? 'bg-[#cb914a] text-white scale-105 shadow-lg' : 'text-[#86a0bb] hover:text-white'}`}>
+                    <IconComp size={18} />
+                    <span className="text-[10px] font-black">{label}</span>
+                </button>
+            );
+        }
 
         function DailyView({ selectedDate, setSelectedDate, tasks, onToggle, moodLogs, updateMood, vision }) {
             const dayTasks = tasks.filter(t => t.frequency === '每日' || t.createdAt?.startsWith(selectedDate));
@@ -233,20 +279,19 @@
 
             return (
                 <div className="space-y-6 fade-entry">
-                    {/* 願景提醒視窗 - 9:16 比例調整為更長且無限制感 */}
-                    <div className="relative w-full aspect-[9/16] max-h-[75vh] rounded-[2.5rem] overflow-hidden shadow-2xl border-[0.5px] border-[#c0b8b4] bg-white mx-auto">
+                    <div className="relative w-full aspect-[9/16] max-h-[70vh] rounded-[2.5rem] overflow-hidden shadow-2xl border-[0.5px] border-[#c0b8b4] bg-white mx-auto">
                         {vision?.base64 ? (
                             <img src={vision.base64} className="w-full h-full object-cover" />
                         ) : (
                             <div className="w-full h-full flex flex-col items-center justify-center text-[#c0b8b4]">
                                 <Icons.Image size={40} strokeWidth={1} />
-                                <p className="text-[12px] mt-3 font-black uppercase tracking-widest">點擊目標頁上傳願景</p>
+                                <p className="text-[12px] mt-3 font-black uppercase tracking-widest">請在目標頁設定願景藍圖</p>
                             </div>
                         )}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80" />
                         <div className="absolute bottom-10 left-8 right-8 text-white">
                             <p className="text-[11px] font-black uppercase tracking-[0.3em] opacity-60 mb-2">2026 實相顯化中</p>
-                            <p className="text-2xl font-black leading-tight tracking-tighter drop-shadow-md">{vision?.title || '正在邁向未來...'}</p>
+                            <p className="text-2xl font-black leading-tight tracking-tighter drop-shadow-md">{vision?.title || '正在下載未來...'}</p>
                         </div>
                     </div>
 
@@ -267,7 +312,7 @@
 
                     <div className="space-y-4">
                         {dayTasks.map(task => {
-                            const isDone = task.completedDates?.includes(selectedDate);
+                            const isDone = (task.completedDates || []).includes(selectedDate);
                             const totalDone = task.completedDates?.length || 0;
                             const target = parseInt(task.targetCount) || 100;
                             const progress = Math.min((totalDone / target) * 100, 100);
@@ -320,52 +365,36 @@
                         <div className="absolute top-0 right-0 p-8 opacity-10"><Icons.Sparkles size={140} /></div>
                         <p className="text-[11px] text-[#cb914a] font-black uppercase tracking-[0.4em] mb-3">年度總顯化率</p>
                         <h3 className="text-6xl font-black mb-10 tracking-tighter">{overallProgress.toFixed(1)}%</h3>
-                        
-                        <div className="relative w-full aspect-[9/16] max-h-[65vh] rounded-[2.5rem] overflow-hidden bg-white/5 border border-white/10 mb-10 mx-auto shadow-inner">
-                           {vision?.base64 ? (
-                               <img src={vision.base64} className="w-full h-full object-cover transition-all duration-1000" style={{ filter: `grayscale(${100 - overallProgress}%) brightness(${0.7 + (overallProgress/100) * 0.3})` }} />
-                           ) : (
-                               <div className="flex items-center justify-center h-full opacity-10"><Icons.Image size={64} /></div>
-                           )}
-                           <div className="absolute inset-0 bg-gradient-to-t from-[#14233a]/60 to-transparent" />
+                        <div className="relative w-full aspect-[9/16] max-h-[60vh] rounded-[2.5rem] overflow-hidden bg-white/5 border border-white/10 mb-10 mx-auto shadow-inner">
+                           {vision?.base64 ? <img src={vision.base64} className="w-full h-full object-cover transition-all duration-1000" style={{ filter: `grayscale(${100 - overallProgress}%) brightness(${0.7 + (overallProgress/100) * 0.3})` }} /> : <div className="flex items-center justify-center h-full opacity-10"><Icons.Image size={64} /></div>}
                         </div>
-                        
                         <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden shadow-inner p-0.5">
                            <div className="h-full bg-gradient-to-r from-[#86a0bb] via-[#cb914a] to-[#cb914a] rounded-full transition-all duration-1000 shadow-[0_0_20px_rgba(203,145,74,0.5)]" style={{ width: `${overallProgress}%` }} />
                         </div>
                     </section>
 
-                    {/* 重製生命領域進度視覺 - 卡片能量環設計 */}
                     <div className="space-y-4">
-                        <h4 className="text-[12px] font-black text-[#14233a] uppercase px-4 tracking-[0.3em] text-center mb-6">生命領域調頻狀態</h4>
+                        <h4 className="text-[12px] font-black text-[#14233a] uppercase px-4 tracking-[0.3em] text-center mb-6">生命領域能量狀態</h4>
                         <div className="grid grid-cols-1 gap-4">
                             {categoryData.map(cd => (
-                                <div key={cd.name} className="bg-white p-6 rounded-[3rem] border-[0.5px] border-[#c0b8b4] shadow-sm flex items-center justify-between group transition-all hover:shadow-md">
+                                <div key={cd.name} className="glass-card p-6 rounded-[3rem] shadow-sm flex items-center justify-between group transition-all hover:shadow-md">
                                     <div className="flex items-center gap-5">
-                                        <div className="relative w-14 h-14 flex items-center justify-center">
-                                            <svg className="w-14 h-14">
-                                                <circle cx="28" cy="28" r="24" fill="none" stroke="#f7f2ed" strokeWidth="4" />
-                                                <circle 
-                                                    cx="28" cy="28" r="24" fill="none" 
-                                                    stroke={colors[cd.name]} 
-                                                    strokeWidth="4" 
-                                                    strokeDasharray="150.8" 
-                                                    strokeDashoffset={150.8 - (150.8 * cd.percent) / 100}
-                                                    strokeLinecap="round"
-                                                    className="progress-ring-circle"
-                                                />
+                                        <div className="relative w-16 h-16 flex items-center justify-center">
+                                            <svg className="w-16 h-16">
+                                                <circle cx="32" cy="32" r="28" fill="none" stroke="rgba(0,0,0,0.03)" strokeWidth="4" />
+                                                <circle cx="32" cy="32" r="28" fill="none" stroke={colors[cd.name]} strokeWidth="4" strokeDasharray="175.9" strokeDashoffset={175.9 - (175.9 * cd.percent) / 100} strokeLinecap="round" className="progress-ring-circle" />
                                             </svg>
                                             <div className="absolute inset-0 flex items-center justify-center">
-                                                <CategoryIcon category={cd.name} size={16} />
+                                                <CategoryIcon category={cd.name} size={20} />
                                             </div>
                                         </div>
                                         <div>
-                                            <p className="text-[13px] font-black text-[#14233a] tracking-tight">{cd.name}</p>
-                                            <p className="text-[9px] font-bold text-[#86a0bb] uppercase tracking-widest mt-0.5">能量顯化中</p>
+                                            <p className="text-[14px] font-black text-[#14233a] tracking-tight">{cd.name}</p>
+                                            <p className="text-[9px] font-bold text-[#86a0bb] uppercase tracking-widest mt-0.5">能量校準中</p>
                                         </div>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-2xl font-black tracking-tighter" style={{ color: colors[cd.name] }}>{cd.percent.toFixed(0)}<span className="text-[10px] ml-0.5 opacity-50">%</span></p>
+                                        <p className="text-2xl font-black tracking-tighter" style={{ color: colors[cd.name] }}>{cd.percent.toFixed(0)}<span className="text-[10px] ml-0.5 opacity-40">%</span></p>
                                     </div>
                                 </div>
                             ))}
@@ -395,27 +424,16 @@
             const handleImageUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     const img = new Image();
                     img.onload = () => {
                         const canvas = document.createElement('canvas');
-                        // 針對 9:16 比例進行縮放處理
                         const MAX_WIDTH = 720; 
                         const scale = MAX_WIDTH / img.width;
-                        canvas.width = MAX_WIDTH;
-                        canvas.height = img.height * scale;
-                        
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                        
-                        // 壓縮為優質 JPEG，確保儲存成功
-                        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
-                        saveVision({ 
-                            base64: compressedBase64, 
-                            title: vision?.title || '我的 2026 生活' 
-                        });
+                        canvas.width = MAX_WIDTH; canvas.height = img.height * scale;
+                        const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        saveVision({ base64: canvas.toDataURL('image/jpeg', 0.8), title: vision?.title || '我的 2026 生活' });
                     };
                     img.src = event.target.result;
                 };
@@ -427,9 +445,9 @@
                     <section className="bg-white p-8 rounded-[3rem] border-[0.5px] border-[#cb914a] space-y-6 shadow-sm">
                         <h3 className="font-black text-lg flex items-center gap-3 text-[#14233a]"><Icons.Image size={20} className="text-[#cb914a]"/>願景藍圖設定</h3>
                         <div className="space-y-4">
-                            <input value={vision?.title || ''} onChange={e => saveVision({...vision, title: e.target.value})} className="w-full p-4 rounded-2xl bg-[#f7f2ed] border-none text-sm font-bold shadow-inner" placeholder="願景名稱 (如: 移居理想之地)" />
+                            <input value={vision?.title || ''} onChange={(e) => { if(user) saveVision({...vision, title: e.target.value}) }} className="w-full p-4 rounded-2xl bg-[#f7f2ed] border-none text-sm font-bold shadow-inner" placeholder="願景名稱..." />
                             <button onClick={() => fileInputRef.current.click()} className="w-full bg-[#14233a] text-white p-4 rounded-[1.5rem] font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all shadow-md">
-                                <Icons.Upload size={18}/> 上傳藍圖 (建議 9:16)
+                                <Icons.Upload size={18}/> 上傳藍圖 (9:16)
                             </button>
                             <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
                         </div>
@@ -448,16 +466,13 @@
                             <div className="space-y-1">
                                 <p className="text-[9px] font-bold px-2 text-[#86a0bb] uppercase">規模</p>
                                 <select value={newType} onChange={e => setNewType(e.target.value)} className="w-full p-3 bg-[#f7f2ed] rounded-xl text-[10px] font-black border-none appearance-none">
-                                    <option value="大項目">大項目</option>
-                                    <option value="小項目">小項目</option>
+                                    <option value="大項目">大項目</option><option value="小項目">小項目</option>
                                 </select>
                             </div>
                             <div className="space-y-1">
                                 <p className="text-[9px] font-bold px-2 text-[#86a0bb] uppercase">週期</p>
                                 <select value={newFreq} onChange={e => setNewFreq(e.target.value)} className="w-full p-3 bg-[#f7f2ed] rounded-xl text-[10px] font-black border-none appearance-none">
-                                    <option value="每日">每日</option>
-                                    <option value="每週">每週</option>
-                                    <option value="每月">每月</option>
+                                    <option value="每日">每日</option><option value="每週">每週</option><option value="每月">每月</option>
                                 </select>
                             </div>
                             <div className="space-y-1">
@@ -468,15 +483,12 @@
                         <button onClick={add} className="w-full bg-[#cb914a] text-white p-4 rounded-2xl font-black shadow-lg active:scale-95 transition-all">啟動計畫</button>
                     </section>
 
-                    <div className="space-y-4">
+                    <div className="space-y-4 px-1">
                         {tasks.map(t => (
                             <div key={t.id} className="bg-white p-5 rounded-[2.5rem] border-[0.5px] border-[#c0b8b4] flex justify-between items-center shadow-sm">
                                 <div className="flex items-center gap-4">
                                     <CategoryIcon category={t.category} />
-                                    <div>
-                                        <p className="font-bold text-sm leading-tight">{t.title}</p>
-                                        <p className="text-[9px] font-black text-[#86a0bb] uppercase tracking-widest">{t.type} • {t.frequency}</p>
-                                    </div>
+                                    <div><p className="font-bold text-sm">{t.title}</p><p className="text-[9px] font-black text-[#86a0bb] uppercase tracking-widest">{t.type} • {t.frequency}</p></div>
                                 </div>
                                 <button onClick={() => db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('tasks').doc(t.id).delete()} className="text-red-200 p-2 hover:text-red-400 transition-colors"><Icons.Trash size={16} /></button>
                             </div>
@@ -491,18 +503,16 @@
             return (
                 <div className="space-y-8 fade-entry pb-10 text-center">
                     <div className="relative h-72 bg-[#14233a] rounded-[4rem] border-8 border-white shadow-xl flex flex-col items-center justify-center overflow-hidden">
-                        <div className="absolute top-6 px-4 py-1 bg-[#cb914a] rounded-full text-[9px] font-black text-white uppercase tracking-widest shadow-lg">感恩微光中心</div>
+                        <div className="absolute top-6 px-4 py-1 bg-[#cb914a] rounded-full text-[9px] font-black text-white uppercase tracking-widest shadow-lg">感恩儲存箱</div>
                         <div className="flex flex-wrap gap-2 p-10 justify-center">
                             {gratitude.slice(0, 50).map((_, i) => <Icons.Star key={i} size={14} className="text-[#cb914a]" fill="#cb914a" />)}
                         </div>
-                        <p className="text-[10px] text-white/40 font-black tracking-widest mb-4 uppercase">已收集 {gratitude.length} 顆微光</p>
+                        <p className="text-[10px] text-white/40 font-black tracking-widest mb-4 uppercase">已收集 {gratitude.length} 顆星星</p>
                     </div>
-                    
                     <div className="bg-white p-6 rounded-[3rem] border-[0.5px] border-[#c0b8b4] shadow-sm space-y-4">
                         <textarea value={text} onChange={e => setText(e.target.value)} placeholder="今日值得感恩的小事？" className="w-full p-6 rounded-[2rem] bg-[#f7f2ed] border-none shadow-inner min-h-[140px] text-sm font-bold resize-none" />
                         <button onClick={async () => { if(text) { await addGratitude(text); setText(''); } }} className="w-full bg-[#14233a] text-white p-5 rounded-[2.5rem] font-black shadow-lg active:scale-95 transition-all">投進儲存箱</button>
                     </div>
-
                     <div className="space-y-4 text-left px-2">
                         <h3 className="font-black text-lg text-[#14233a] mt-8 mb-4 px-2 tracking-widest uppercase">能量回溯</h3>
                         {gratitude.map(g => (
@@ -522,7 +532,6 @@
         function FutureDialogue({ letters, db, appId, user }) {
             const [text, setText] = useState('');
             const [editingId, setEditingId] = useState(null);
-
             const handleSave = async () => {
                 if(!text) return;
                 const ref = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('letters');
@@ -530,28 +539,25 @@
                 else await ref.add({ content: text, createdAt: new Date().toISOString() });
                 setText(''); setEditingId(null);
             };
-
             return (
                 <div className="space-y-8 fade-entry pb-10">
                     <div className="bg-white p-4 rounded-[3rem] border-[0.5px] border-[#c0b8b4] shadow-md flex items-center gap-3 pr-2">
                         <textarea value={text} onChange={e => setText(e.target.value)} placeholder="給 2026 年底的我..." className="flex-1 bg-transparent border-none text-sm font-bold p-4 h-14 resize-none focus:ring-0" />
                         <button onClick={handleSave} className="bg-[#cb914a] text-white p-4 rounded-full shadow-lg active:scale-90 transition-all">{editingId ? <Icons.Save size={20}/> : <Icons.Send size={20}/>}</button>
                     </div>
-                    <div className="space-y-6">
-                        {letters.map((l, i) => (
-                            <div key={l.id} className="relative bg-white p-8 rounded-[2.5rem] shadow-sm border-[0.5px] border-[#c0b8b4]">
-                                <div className="absolute -top-3 left-8 px-4 py-1 bg-[#14233a] text-white text-[9px] font-black rounded-full shadow-md uppercase">信件 #{letters.length - i}</div>
-                                <p className="text-sm font-bold leading-relaxed">{l.content}</p>
-                                <div className="flex justify-between items-center mt-6 pt-4 border-t-[0.5px] border-[#f7f2ed]">
-                                    <span className="text-[10px] opacity-30 font-bold uppercase">{new Date(l.createdAt).toLocaleDateString()}</span>
-                                    <div className="flex gap-4">
-                                        <button onClick={() => { setText(l.content); setEditingId(l.id); window.scrollTo({top: 0, behavior: 'smooth'}); }} className="text-[#cb914a]"><Icons.Edit size={14}/></button>
-                                        <button onClick={() => db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('letters').doc(l.id).delete()} className="text-red-200"><Icons.Trash size={14}/></button>
-                                    </div>
+                    <div className="space-y-6">{letters.map((l, i) => (
+                        <div key={l.id} className="relative bg-white p-8 rounded-[2.5rem] shadow-sm border-[0.5px] border-[#c0b8b4]">
+                            <div className="absolute -top-3 left-8 px-4 py-1 bg-[#14233a] text-white text-[9px] font-black rounded-full shadow-md uppercase">信件 #{letters.length - i}</div>
+                            <p className="text-sm font-bold leading-relaxed">{l.content}</p>
+                            <div className="flex justify-between items-center mt-6 pt-4 border-t-[0.5px] border-[#f7f2ed]">
+                                <span className="text-[10px] opacity-30 font-bold uppercase">{new Date(l.createdAt).toLocaleDateString()}</span>
+                                <div className="flex gap-4">
+                                    <button onClick={() => { setText(l.content); setEditingId(l.id); window.scrollTo({top: 0, behavior: 'smooth'}); }} className="text-[#cb914a]"><Icons.Edit size={14}/></button>
+                                    <button onClick={() => db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('letters').doc(l.id).delete()} className="text-red-200"><Icons.Trash size={14}/></button>
                                 </div>
                             </div>
-                        ))}
-                    </div>
+                        </div>
+                    ))}</div>
                 </div>
             );
         }
